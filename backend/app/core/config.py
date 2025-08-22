@@ -1,3 +1,9 @@
+import os
+
+# Chave secreta (gerar uma segura)
+SECRET_KEY = os.getenv("SECRET_KEY", "sua_chave_super_secreta")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # tempo em minutos
 from pydantic_settings import BaseSettings
 from typing import Optional
 
