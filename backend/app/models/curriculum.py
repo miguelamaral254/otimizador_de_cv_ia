@@ -25,7 +25,7 @@ class Curriculum(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relacionamentos
-    user = relationship("User", back_populates="curricula")
+    user = relationship("User", back_populates="curriculum")
     versions = relationship("CurriculumVersion", back_populates="curriculum", cascade="all, delete-orphan")
     analyses = relationship("CurriculumAnalysis", back_populates="curriculum", cascade="all, delete-orphan")
     
@@ -40,7 +40,7 @@ class CurriculumVersion(Base):
     
     # Identificação
     id = Column(Integer, primary_key=True, index=True)
-    curriculum_id = Column(Integer, ForeignKey("curricula.id"), nullable=False)
+    curriculum_id = Column(Integer, ForeignKey("curriculum.id"), nullable=False)
     
     # Versão
     version_number = Column(Integer, nullable=False)
@@ -69,7 +69,7 @@ class CurriculumAnalysis(Base):
     
     # Identificação
     id = Column(Integer, primary_key=True, index=True)
-    curriculum_id = Column(Integer, ForeignKey("curricula.id"), nullable=False)
+    curriculum_id = Column(Integer, ForeignKey("curriculum.id"), nullable=False)
     version_id = Column(Integer, ForeignKey("curriculum_versions.id"), nullable=True)
     
     # Análise com spaCy
