@@ -203,3 +203,73 @@ async def get_curriculum(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno do servidor: {str(e)}"
         )
+
+
+@router.get("/{curriculum_id}/analyses", response_model=list[CurriculumAnalysisResponse])
+async def get_curriculum_analyses(
+    curriculum_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtém todas as análises de um currículo específico do usuário.
+    
+    Args:
+        curriculum_id: ID do currículo
+        current_user: Usuário autenticado
+        db: Sessão do banco de dados
+        
+    Returns:
+        List[CurriculumAnalysisResponse]: Lista de análises do currículo
+    """
+    try:
+        # Verificar se o currículo pertence ao usuário
+        curriculum_result = await db.execute(
+            select(Curriculum).where(
+                Curriculum.id == curriculum_id,
+                Curriculum.user_id == current_user.id
+            )
+        )
+        curriculum = curriculum_result.scalar_one_or_none()
+        
+        if not curriculum:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Currículo não encontrado"
+            )
+        
+        # Buscar todas as análises do currículo
+        analyses_result = await db.execute(
+            select(CurriculumAnalysis)
+            .where(CurriculumAnalysis.curriculum_id == curriculum_id)
+            .order_by(CurriculumAnalysis.analysis_date)
+        )
+        analyses = analyses_result.scalars().all()
+        
+        return [
+            CurriculumAnalysisResponse(
+                id=analysis.id,
+                curriculum_id=analysis.curriculum_id,
+                version_id=analysis.version_id,
+                spacy_analysis=analysis.spacy_analysis,
+                gemini_analysis=analysis.gemini_analysis,
+                action_verbs_count=analysis.action_verbs_count,
+                quantified_results_count=analysis.quantified_results_count,
+                keywords_score=analysis.keywords_score,
+                overall_score=analysis.overall_score,
+                strengths=analysis.strengths or [],
+                weaknesses=analysis.weaknesses or [],
+                suggestions=analysis.suggestions or [],
+                analysis_date=analysis.analysis_date,
+                processing_time=analysis.processing_time
+            )
+            for analysis in analyses
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno do servidor: {str(e)}"
+        )

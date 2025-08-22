@@ -6,7 +6,7 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
-from app.routers import curriculum, auth
+from app.routers import curriculum, auth, metrics
 from app.core.database import create_tables
 
 # Configura logging
@@ -66,6 +66,12 @@ app.include_router(
     curriculum.router,
     prefix="/api/v1/curriculum",
     tags=["curriculum"]
+)
+
+app.include_router(
+    metrics.router,
+    prefix="/api/v1/metrics",
+    tags=["metrics"]
 )
 
 # Rota de health check

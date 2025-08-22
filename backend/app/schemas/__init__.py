@@ -19,7 +19,10 @@ from .metrics import (
     ComparativeAnalysis,
     DashboardResponse,
     ReportFilters,
-    ReportResponse
+    ReportResponse,
+    CurriculumMetrics,
+    CurriculumVersionMetrics,
+    TimeSeriesMetricsResponse
 )
 
 __all__ = [
@@ -33,5 +36,6 @@ __all__ = [
     # Metrics schemas
     "ProgressMetrics", "ScoreTrend", "ScoreTrendResponse", "KeywordAnalysis",
     "IndustryInsights", "ComparativeAnalysis", "DashboardResponse",
-    "ReportFilters", "ReportResponse"
+    "ReportFilters", "ReportResponse", "CurriculumMetrics", "CurriculumVersionMetrics",
+    "TimeSeriesMetricsResponse"
 ]

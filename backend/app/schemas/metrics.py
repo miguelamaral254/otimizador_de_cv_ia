@@ -82,3 +82,30 @@ class ReportResponse(BaseModel):
     detailed_data: List[Dict[str, Any]]
     charts_data: Dict[str, Any]  # Dados para gráficos
     recommendations: List[str]
+
+
+class CurriculumMetrics(BaseModel):
+    """Schema para métricas individuais de um currículo."""
+    score: float = Field(..., ge=0, le=100, description="Pontuação geral (0-100)")
+    clarity: float = Field(..., ge=0, le=100, description="Clareza textual (0-100)")
+    relevance: float = Field(..., ge=0, le=100, description="Relevância para vaga desejada (0-100)")
+    keywords: float = Field(..., ge=0, le=100, description="Uso de palavras-chave (0-100)")
+    structure: float = Field(..., ge=0, le=100, description="Estrutura e formatação (0-100)")
+    personalization: float = Field(..., ge=0, le=100, description="Nível de personalização (0-100)")
+
+
+class CurriculumVersionMetrics(BaseModel):
+    """Schema para dados de uma versão de currículo na série temporal."""
+    version_id: str = Field(..., description="Identificador da versão")
+    timestamp: datetime = Field(..., description="Data/hora do envio")
+    metrics: CurriculumMetrics = Field(..., description="Métricas da versão")
+
+
+class TimeSeriesMetricsResponse(BaseModel):
+    """Schema para resposta da série temporal de métricas."""
+    user_id: int = Field(..., description="ID do usuário")
+    total_versions: int = Field(..., description="Total de versões analisadas")
+    time_series: List[CurriculumVersionMetrics] = Field(..., description="Série temporal de métricas")
+    average_score: float = Field(..., description="Pontuação média geral")
+    best_score: float = Field(..., description="Melhor pontuação alcançada")
+    improvement_rate: float = Field(..., description="Taxa de melhoria (porcentagem)")
