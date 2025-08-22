@@ -39,11 +39,9 @@ async def upload_curriculum(file: UploadFile = File(...), current_user: User = D
     # Para esta parte, você precisará da sessão do banco de dados (db).
     # Exemplo de como seria a lógica:
     # new_curriculum = Curriculum(
-    #     user_id=current_user.id,
-    #     original_filename=file.filename,
-    #     unique_filename=unique_filename,
-    #     file_path=str(file_path),
-    #     file_size=len(contents)  # Armazena o tamanho do arquivo em bytes
+    #     usuario_id=current_user.id,
+    #     nome_original=file.filename,
+    #     caminho_arquivo=str(file_path),
     # )
     # db.add(new_curriculum)
     # db.commit()
