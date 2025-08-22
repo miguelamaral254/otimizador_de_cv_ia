@@ -53,3 +53,9 @@ async def upload_curriculum(file: UploadFile = File(...), current_user: User = D
         "original_filename": file.filename,
         "saved_as": unique_filename,
     }       
+
+@router.get("/history")
+async def get_history(db: Session = Depends(get_db_session), current_user: User = Depends(get_current_user)):
+    history_analysis = db.query(Curriculum).filter(Curriculum.user_id == current_user.id).all()
+
+    return history_analysis
