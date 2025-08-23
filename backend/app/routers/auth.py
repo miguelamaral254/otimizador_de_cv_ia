@@ -6,9 +6,10 @@ from passlib.context import CryptContext
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, TokenResponse
-from app.api.dependencies import create_access_token
+from app.schemas.user import UserCreate, UserResponse, Token
+from app.api.dependencies import create_access_token, get_current_user
 
 router = APIRouter()
 
@@ -90,7 +91,7 @@ async def register(
         )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
@@ -127,9 +128,10 @@ async def login(
         # Cria token de acesso
         access_token = create_access_token(data={"sub": str(user.id)})
         
-        return TokenResponse(
+        return Token(
             access_token=access_token,
-            token_type="bearer"
+            token_type="bearer",
+            expires_in=settings.access_token_expire_minutes * 60
         )
         
     except HTTPException:
