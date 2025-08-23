@@ -11,7 +11,7 @@ engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     poolclass=StaticPool,  # Para SQLite
-    connect_args={"check_same_thread": False}  # Necessário para SQLite
+    connect_args={"check_same_thread": False},  # Necessário para SQLite
 )
 
 # Sessão assíncrona
