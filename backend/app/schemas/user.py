@@ -72,3 +72,13 @@ class TokenData(BaseModel):
 
     email: Optional[str] = None
     user_id: Optional[int] = None
+
+# Modelo de request para login
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+# Modelo de response do token
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
