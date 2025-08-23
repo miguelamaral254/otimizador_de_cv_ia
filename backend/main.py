@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
-from backend.app.api.v1.endpoints import auth  # importar router
 import uvicorn
 
 from app.core.config import settings
@@ -109,8 +108,3 @@ if __name__ == "__main__":
         reload=settings.debug,
         log_level="info"
     )
-
-app = FastAPI()
-
-# Incluir router
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
