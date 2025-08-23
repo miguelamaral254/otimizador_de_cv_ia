@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-from backend.app.core.database import Base
 
 
 class User(Base):
@@ -17,7 +16,6 @@ class User(Base):
     
     # Autenticação
     hashed_password = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
     
     # Metadados
     created_at = Column(DateTime(timezone=True), server_default=func.now())

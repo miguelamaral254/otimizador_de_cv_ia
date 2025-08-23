@@ -1,54 +1,137 @@
 # backend/app/api/v1/endpoints/user.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from backend.app.core.database import get_db
-from backend.app.models.user import User
-from backend.app.schemas.user import UserCreate, UserResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.core.database import get_db
+from app.models.user import User
+from app.schemas.user import UserCreate, UserResponse
 from passlib.context import CryptContext
-from backend.app.schemas.user import LoginRequest, TokenResponse
-from backend.app.core.security import verify_password, create_access_token
+from app.schemas.user import LoginRequest, TokenResponse
+from app.core.security import verify_password, create_access_token
+from datetime import datetime
 
 router = APIRouter()
 
-# Criamos um contexto para hashing de senha
+# Configuração para hash de senhas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Função auxiliar: transforma senha em hash
+
 def get_password_hash(password: str) -> str:
+    """Gera hash da senha."""
     return pwd_context.hash(password)
 
-# Rota de criar usuário
-@router.post("/users", response_model=UserResponse)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    # 1. Verificar se já existe usuário com o mesmo email
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email já registrado")
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Registra um novo usuário.
     
+    Args:
+        user_data: Dados do usuário para registro
+        db: Sessão do banco de dados
+        
+    Returns:
+        UserResponse: Dados do usuário criado
+        
+    Raises:
+        HTTPException: Se email ou username já existirem
+    """
+    try:
+        # Verifica se o email já existe
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email já está em uso"
+            )
+        
+        # Verifica se o username já existe
+        result = await db.execute(select(User).where(User.username == user_data.username))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username já está em uso"
+            )
+        
+        # Cria o novo usuário
+        hashed_password = get_password_hash(user_data.password)
+        new_user = User(
+            email=user_data.email,
+            username=user_data.username,
+            hashed_password=hashed_password
+        )
+        
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+        
+        return UserResponse(
+            id=new_user.id,
+            email=new_user.email,
+            username=new_user.username,
+            created_at=new_user.created_at,
+            updated_at=new_user.updated_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno do servidor: {str(e)}"
+        )
+
+
 @router.post("/login", response_model=TokenResponse)
-def login(login: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == login.email).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado")
+async def login(
+    login_data: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Autentica um usuário e retorna token JWT.
     
-    if not verify_password(login.password, user.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Senha incorreta")
-    
-    token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
-
-    # 2. Criar usuário novo com senha criptografada
-    hashed_password = get_password_hash(user.password)
-    new_user = User(
-        name=user.name,
-        email=user.email,
-        password=hashed_password
-    )
-
-    # 3. Salvar no banco
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return new_user
+    Args:
+        login_data: Dados de login (username e password)
+        db: Sessão do banco de dados
+        
+    Returns:
+        TokenResponse: Token de acesso e tipo
+        
+    Raises:
+        HTTPException: Se as credenciais estiverem incorretas
+    """
+    try:
+        # Busca o usuário pelo username
+        result = await db.execute(select(User).where(User.username == login_data.username))
+        user = result.scalar_one_or_none()
+        
+        if not user or not verify_password(login_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Username ou senha incorretos",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Atualiza último login
+        user.last_login = datetime.utcnow()
+        await db.commit()
+        
+        # Cria token de acesso
+        access_token = create_access_token(data={"sub": str(user.id)})
+        
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno do servidor: {str(e)}"
+        )
