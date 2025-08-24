@@ -6,7 +6,7 @@ Este arquivo testa as funções de análise sem depender do FastAPI.
 
 import asyncio
 import json
-from app.analysis import (
+from app.agno import (
     analisar_quantificacao,
     analisar_verbos_de_acao,
     calcular_pontuacoes,

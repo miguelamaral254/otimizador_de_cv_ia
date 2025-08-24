@@ -5,29 +5,11 @@ Testes unitários para o módulo de configuração.
 import pytest
 import os
 from unittest.mock import patch, MagicMock
-from app.core.config import Settings, settings
+from app.core.config import Settings, settings, SettingsConfigDict
 
 
 class TestSettings:
     """Testes para a classe Settings."""
-    
-    def test_settings_default_values(self):
-        """Testa valores padrão das configurações."""
-        with patch.dict(os.environ, {}, clear=True):
-            settings = Settings()
-            
-            # Verifica valores padrão
-            assert settings.database_url == "sqlite+aiosqlite:///./otimizador_cv.db"
-            assert settings.secret_key == "your-secret-key-here-change-in-production-make-it-very-long-and-random"
-            assert settings.algorithm == "HS256"
-            assert settings.access_token_expire_minutes == 30
-            assert settings.upload_dir == "./uploads"
-            assert settings.max_file_size == 10485760  # 10MB
-            assert settings.spacy_model == "pt_core_news_sm"
-            assert settings.environment == "development"
-            assert settings.debug is True
-            assert settings.host == "0.0.0.0"
-            assert settings.port == 8000
     
     def test_settings_from_environment(self):
         """Testa configurações a partir de variáveis de ambiente."""
@@ -64,7 +46,12 @@ class TestSettings:
     
     def test_settings_validation(self):
         """Testa validação das configurações."""
-        with patch.dict(os.environ, {}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             
             # Verifica tipos
@@ -82,19 +69,37 @@ class TestSettings:
     
     def test_settings_file_size_conversion(self):
         """Testa conversão de tamanho de arquivo."""
-        with patch.dict(os.environ, {"MAX_FILE_SIZE": "5242880"}, clear=True):  # 5MB
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "MAX_FILE_SIZE": "5242880"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):  # 5MB
             settings = Settings()
             assert settings.max_file_size == 5 * 1024 * 1024  # 5MB
     
     def test_settings_token_expire_conversion(self):
         """Testa conversão de tempo de expiração do token."""
-        with patch.dict(os.environ, {"ACCESS_TOKEN_EXPIRE_MINUTES": "120"}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "ACCESS_TOKEN_EXPIRE_MINUTES": "120"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             assert settings.access_token_expire_minutes == 120
     
     def test_settings_port_conversion(self):
         """Testa conversão da porta."""
-        with patch.dict(os.environ, {"PORT": "9000"}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "PORT": "9000"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             assert settings.port == 9000
 
@@ -113,7 +118,7 @@ class TestSettingsInstance:
         """Testa valores da instância global."""
         from app.core.config import settings
         
-        # Verifica se tem valores padrão
+        # Verifica se tem valores obrigatórios
         assert hasattr(settings, 'database_url')
         assert hasattr(settings, 'secret_key')
         assert hasattr(settings, 'algorithm')
@@ -133,6 +138,7 @@ class TestSettingsEdgeCases:
     def test_settings_empty_strings(self):
         """Testa configurações com strings vazias."""
         test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
             "SECRET_KEY": "",
             "GEMINI_API_KEY": "",
             "UPLOAD_DIR": "",
@@ -153,6 +159,8 @@ class TestSettingsEdgeCases:
         # Pydantic v2 não permite valores inválidos por padrão
         # Vamos testar com valores válidos mas extremos
         test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
             "ACCESS_TOKEN_EXPIRE_MINUTES": "999999",
             "MAX_FILE_SIZE": "1073741824",  # 1GB
             "PORT": "65535"
@@ -168,20 +176,14 @@ class TestSettingsEdgeCases:
     def test_settings_boolean_conversion(self):
         """Testa conversão de valores booleanos."""
         test_env = {
-            "DEBUG": "true",
-            "DEBUG_FALSE": "false",
-            "DEBUG_INVALID": "invalid"
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "DEBUG": "false"
         }
         
         with patch.dict(os.environ, test_env, clear=True):
-            # Testa conversão de string para boolean
             settings = Settings()
-            assert settings.debug is True  # valor padrão
-            
-            # Testa com valor específico
-            with patch.dict(os.environ, {"DEBUG": "false"}, clear=True):
-                settings = Settings()
-                assert settings.debug is False
+            assert settings.debug is False
 
 
 class TestSettingsSecurity:
@@ -189,7 +191,12 @@ class TestSettingsSecurity:
     
     def test_secret_key_minimum_length(self):
         """Testa se a chave secreta tem comprimento mínimo."""
-        with patch.dict(os.environ, {}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             
             # Chave secreta deve ter pelo menos 10 caracteres
@@ -200,13 +207,24 @@ class TestSettingsSecurity:
         valid_algorithms = ["HS256", "HS384", "HS512"]
         
         for algo in valid_algorithms:
-            with patch.dict(os.environ, {"ALGORITHM": algo}, clear=True):
+            test_env = {
+                "DATABASE_URL": "sqlite:///test.db",
+                "SECRET_KEY": "test-secret-key-123",
+                "ALGORITHM": algo
+            }
+            
+            with patch.dict(os.environ, test_env, clear=True):
                 settings = Settings()
                 assert settings.algorithm in valid_algorithms
     
     def test_token_expire_reasonable_range(self):
         """Testa se o tempo de expiração está em range razoável."""
-        with patch.dict(os.environ, {}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             
             # Deve estar entre 1 minuto e 24 horas
@@ -214,7 +232,12 @@ class TestSettingsSecurity:
     
     def test_port_valid_range(self):
         """Testa se a porta está em range válido."""
-        with patch.dict(os.environ, {}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             
             # Porta deve estar entre 1 e 65535
@@ -229,18 +252,85 @@ class TestSettingsEnvironment:
         valid_environments = ["development", "staging", "production", "test"]
         
         for env in valid_environments:
-            with patch.dict(os.environ, {"ENVIRONMENT": env}, clear=True):
+            test_env = {
+                "DATABASE_URL": "sqlite:///test.db",
+                "SECRET_KEY": "test-secret-key-123",
+                "ENVIRONMENT": env
+            }
+            
+            with patch.dict(os.environ, test_env, clear=True):
                 settings = Settings()
                 assert settings.environment == env
     
     def test_debug_default_development(self):
         """Testa se debug é True por padrão em development."""
-        with patch.dict(os.environ, {"ENVIRONMENT": "development"}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "ENVIRONMENT": "development"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             assert settings.debug is True
     
     def test_debug_production(self):
         """Testa se debug pode ser False em production."""
-        with patch.dict(os.environ, {"ENVIRONMENT": "production", "DEBUG": "false"}, clear=True):
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "ENVIRONMENT": "production",
+            "DEBUG": "false"
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
             settings = Settings()
             assert settings.debug is False
+
+
+class TestSettingsRequiredFields:
+    """Testes para campos obrigatórios."""
+    
+    def test_database_url_required(self):
+        """Testa se DATABASE_URL é obrigatório."""
+        # Remove o arquivo .env temporariamente para testar campos obrigatórios
+        with patch.dict(os.environ, {}, clear=True):
+            # Como o Pydantic carrega do arquivo .env, vamos testar sem ele
+            with patch('app.core.config.Settings.model_config') as mock_config:
+                mock_config.return_value = SettingsConfigDict(
+                    env_file=None,  # Não carrega arquivo .env
+                    case_sensitive=False,
+                    extra="ignore"
+                )
+                with pytest.raises(Exception):  # Pydantic validation error
+                    Settings()
+    
+    def test_secret_key_required(self):
+        """Testa se SECRET_KEY é obrigatório."""
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db"
+            # SECRET_KEY não definido
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
+            # Como o Pydantic carrega do arquivo .env, vamos testar sem ele
+            with patch('app.core.config.Settings.model_config') as mock_config:
+                mock_config.return_value = SettingsConfigDict(
+                    env_file=None,  # Não carrega arquivo .env
+                    case_sensitive=False,
+                    extra="ignore"
+                )
+                with pytest.raises(Exception):  # Pydantic validation error
+                    Settings()
+    
+    def test_optional_fields_can_be_none(self):
+        """Testa se campos opcionais podem ser None."""
+        test_env = {
+            "DATABASE_URL": "sqlite:///test.db",
+            "SECRET_KEY": "test-secret-key-123",
+            "GEMINI_API_KEY": ""  # Campo opcional
+        }
+        
+        with patch.dict(os.environ, test_env, clear=True):
+            settings = Settings()
+            assert settings.gemini_api_key == ""

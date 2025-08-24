@@ -11,7 +11,10 @@ class CurriculumBase(BaseModel):
 
 class CurriculumCreate(CurriculumBase):
     """Schema para criação de currículo."""
-    pass  # Os dados do arquivo vêm do upload
+    user_id: int
+    original_filename: str
+    file_path: str
+    file_size: int
 
 
 class CurriculumUpdate(CurriculumBase):

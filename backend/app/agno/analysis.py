@@ -13,8 +13,8 @@ import os
 from typing import Dict, List, Tuple, Any
 import spacy
 import google.generativeai as genai
-from app.core.config import settings
-from app.agno import AgnoOrchestrator
+from ..core.config import settings
+from .orchestrator import AgnoOrchestrator
 
 # --- Configuração Inicial ---
 try:

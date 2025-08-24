@@ -4,7 +4,7 @@ Testes unitários para o módulo de análise de currículos.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from app.analysis import (
+from app.agno import (
     analisar_quantificacao,
     analisar_verbos_de_acao,
     calcular_pontuacoes,
@@ -48,8 +48,8 @@ class TestAnalisarQuantificacao:
         mock_doc = Mock()
         mock_doc.__iter__ = lambda self: iter([mock_token1, mock_token2, mock_token3, mock_token4, mock_token5])
         
-        with patch('app.analysis.SPACY_AVAILABLE', True), \
-             patch('app.analysis.nlp') as mock_nlp:
+        with patch('app.agno.analysis.SPACY_AVAILABLE', True), \
+             patch('app.agno.analysis.nlp') as mock_nlp:
             
             mock_nlp.return_value = mock_doc
             
@@ -65,7 +65,7 @@ class TestAnalisarQuantificacao:
         """Testa análise de quantificação sem spaCy disponível."""
         texto_cv = "Desenvolvi 5 projetos e aumentei 25% da performance."
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_quantificacao(texto_cv)
             
             assert "numeros_encontrados" in resultado
@@ -75,7 +75,7 @@ class TestAnalisarQuantificacao:
     
     def test_analisar_quantificacao_texto_vazio(self):
         """Testa análise de quantificação com texto vazio."""
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_quantificacao("")
             
             assert resultado["numeros_encontrados"] == []
@@ -85,8 +85,8 @@ class TestAnalisarQuantificacao:
         """Testa análise de quantificação com erro no spaCy."""
         texto_cv = "Texto com números 123"
         
-        with patch('app.analysis.SPACY_AVAILABLE', True), \
-             patch('app.analysis.nlp', side_effect=Exception("Erro spaCy")):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', True), \
+             patch('app.agno.analysis.nlp', side_effect=Exception("Erro spaCy")):
             
             resultado = analisar_quantificacao(texto_cv)
             
@@ -118,8 +118,8 @@ class TestAnalisarVerbosDeAcao:
         mock_doc = Mock()
         mock_doc.__iter__ = lambda self: iter([mock_token1, mock_token2, mock_token3])
         
-        with patch('app.analysis.SPACY_AVAILABLE', True), \
-             patch('app.analysis.nlp') as mock_nlp:
+        with patch('app.agno.analysis.SPACY_AVAILABLE', True), \
+             patch('app.agno.analysis.nlp') as mock_nlp:
             
             mock_nlp.return_value = mock_doc
             
@@ -134,7 +134,7 @@ class TestAnalisarVerbosDeAcao:
         """Testa análise de verbos sem spaCy disponível."""
         texto_cv = "Desenvolvi sistemas e implementei soluções."
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_verbos_de_acao(texto_cv)
             
             assert "verbos_encontrados" in resultado
@@ -144,7 +144,7 @@ class TestAnalisarVerbosDeAcao:
     
     def test_analisar_verbos_texto_vazio(self):
         """Testa análise de verbos com texto vazio."""
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_verbos_de_acao("")
             
             assert resultado["verbos_encontrados"] == []
@@ -155,8 +155,8 @@ class TestAnalisarVerbosDeAcao:
         """Testa análise de verbos com erro no spaCy."""
         texto_cv = "Texto com verbos"
         
-        with patch('app.analysis.SPACY_AVAILABLE', True), \
-             patch('app.analysis.nlp', side_effect=Exception("Erro spaCy")):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', True), \
+             patch('app.agno.analysis.nlp', side_effect=Exception("Erro spaCy")):
             
             resultado = analisar_verbos_de_acao(texto_cv)
             
@@ -265,7 +265,7 @@ class TestAnalisarCurriculoCompleto:
         texto_cv = "Desenvolvedor Python com 5 anos de experiência. Desenvolvi 10 projetos."
         descricao_vaga = "Desenvolvedor Python com experiência em Django"
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_curriculo_completo(texto_cv, descricao_vaga)
             
             assert "quantificacao" in resultado
@@ -278,7 +278,7 @@ class TestAnalisarCurriculoCompleto:
         """Testa análise completa sem descrição da vaga."""
         texto_cv = "Desenvolvedor Python com 5 anos de experiência."
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_curriculo_completo(texto_cv)
             
             assert "quantificacao" in resultado
@@ -376,7 +376,7 @@ class TestCasosEdge:
         """Testa análise com texto muito longo."""
         texto_cv = "Texto " * 1000 + "com números 123 e 456"
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_quantificacao(texto_cv)
             
             assert "numeros_encontrados" in resultado
@@ -386,7 +386,7 @@ class TestCasosEdge:
         """Testa análise com caracteres especiais."""
         texto_cv = "Desenvolvi sistemas com Python 3.8+ e Django 2.2+"
         
-        with patch('app.analysis.SPACY_AVAILABLE', False):
+        with patch('app.agno.analysis.SPACY_AVAILABLE', False):
             resultado = analisar_verbos_de_acao(texto_cv)
             
             assert "verbos_encontrados" in resultado

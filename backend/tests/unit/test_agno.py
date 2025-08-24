@@ -389,7 +389,7 @@ class TestAgnoIntegration:
     def test_agno_analysis_functions_import(self):
         """Testa se as funções de análise do Agno podem ser importadas."""
         try:
-            from app.analysis import (
+            from app.agno import (
                 analisar_curriculo_com_agno,
                 obter_resumo_agno,
                 verificar_saude_agno

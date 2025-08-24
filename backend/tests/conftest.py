@@ -4,7 +4,31 @@ Configuração e fixtures comuns para os testes.
 
 import pytest
 import asyncio
+import os
 from typing import Generator
+from unittest.mock import patch
+
+# Configurar variáveis de ambiente para testes
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Configura o ambiente de teste automaticamente."""
+    test_env = {
+        "ENVIRONMENT": "test",
+        "DEBUG": "true",
+        "HOST": "127.0.0.1",
+        "PORT": "8001",
+        "DATABASE_URL": "sqlite+aiosqlite:///./test_otimizador_cv.db",
+        "SECRET_KEY": "test-secret-key-for-testing-only-not-for-production",
+        "ALGORITHM": "HS256",
+        "ACCESS_TOKEN_EXPIRE_MINUTES": "30",
+        "GEMINI_API_KEY": "test-gemini-api-key-for-testing",
+        "UPLOAD_DIR": "./test_uploads",
+        "MAX_FILE_SIZE": "1048576",
+        "SPACY_MODEL": "pt_core_news_sm"
+    }
+    
+    with patch.dict(os.environ, test_env, clear=True):
+        yield
 
 # Fixtures básicas para testes
 @pytest.fixture(scope="session")

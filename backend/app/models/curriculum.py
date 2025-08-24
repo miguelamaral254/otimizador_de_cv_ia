@@ -28,6 +28,7 @@ class Curriculum(Base):
     user = relationship("User", back_populates="curriculum")
     versions = relationship("CurriculumVersion", back_populates="curriculum", cascade="all, delete-orphan")
     analyses = relationship("CurriculumAnalysis", back_populates="curriculum", cascade="all, delete-orphan")
+    metrics = relationship("Metrics", back_populates="curriculum", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Curriculum(id={self.id}, title='{self.title}', user_id={self.user_id})>"
