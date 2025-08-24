@@ -8,7 +8,9 @@ from .curriculum import (
     CurriculumAnalysisResponse,
     CurriculumUploadResponse,
     CurriculumListResponse,
-    CurriculumWithAnalysisResponse
+    CurriculumWithAnalysisResponse,
+    CurriculumInfo,
+    CurriculumAnalysis
 )
 from .metrics import (
     ProgressMetrics,
@@ -33,6 +35,7 @@ __all__ = [
     "CurriculumVersionCreate", "CurriculumVersionResponse",
     "CurriculumAnalysisResponse", "CurriculumUploadResponse",
     "CurriculumListResponse", "CurriculumWithAnalysisResponse",
+    "CurriculumInfo", "CurriculumAnalysis",
     # Metrics schemas
     "ProgressMetrics", "ScoreTrend", "ScoreTrendResponse", "KeywordAnalysis",
     "IndustryInsights", "ComparativeAnalysis", "DashboardResponse",

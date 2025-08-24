@@ -120,3 +120,23 @@ class CurriculumWithAnalysisResponse(BaseModel):
     latest_analysis: Optional[CurriculumAnalysisResponse] = None
     versions: List[CurriculumVersionResponse] = []
     analysis_history: List[CurriculumAnalysisResponse] = []
+
+
+# --- Novos Schemas para a API de Análise ---
+
+class CurriculumInfo(BaseModel):
+    """Schema para informações básicas do currículo."""
+    id: int
+    user_id: int
+    filename: str
+    file_path: str
+    upload_date: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class CurriculumAnalysis(BaseModel):
+    """Schema principal para a resposta completa da análise."""
+    curriculum_info: CurriculumInfo
+    analysis: Dict[str, Any]

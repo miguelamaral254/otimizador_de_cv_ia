@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     
     # Configurações de IA (Google Gemini)
-    gemini_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = "AIzaSyAjc5Nb7v3GPkNmjb2xJOHlRfK6Py54R3E"
     
     # Configurações de Upload
     upload_dir: str = "./uploads"

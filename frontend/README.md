@@ -1,7 +1,18 @@
-# 🚀 Desafio Técnico - Otimizador de Currículos com IA
+# 🚀 Frontend - Otimizador de Currículos com IA
 
-Este é o setup inicial do **frontend React** para o desafio técnico "Otimizador de Currículos com IA". 
-A estrutura está preparada para que sua equipe implemente as funcionalidades gradualmente, trabalhando tanto no frontend quanto no backend.
+Este é o **frontend React** da aplicação "Otimizador de Currículos com IA", uma plataforma SaaS completa para análise e otimização de currículos usando inteligência artificial.
+
+## 📋 Índice
+
+- [Visão Geral](#-visão-geral)
+- [Arquitetura](#️-arquitetura-do-projeto)
+- [Setup](#️-setup-inicial)
+- [Estrutura](#-estrutura-do-frontend)
+- [Tecnologias](#-tecnologias-configuradas)
+- [Funcionalidades](#-funcionalidades)
+- [Desenvolvimento](#-comandos-úteis-para-desenvolvimento)
+- [Recursos](#-recursos-de-aprendizado)
+- [Entrega](#-entrega-final)
 
 ## 🎯 Objetivo do Desafio
 
@@ -95,10 +106,39 @@ src/
 │   ├── Home.jsx        # Página inicial
 │   ├── About.jsx       # Sobre o projeto
 │   └── Contact.jsx     # Página de contato
+├── api/                 # Cliente HTTP e configurações
+│   ├── auth.js         # API de autenticação
+│   └── client.js       # Cliente Axios configurado
 ├── App.jsx              # Componente principal
 ├── main.jsx            # Ponto de entrada
 └── index.css           # Estilos globais
 ```
+
+## 🎨 Design System
+
+### Cores
+- **Primária**: Azul (#3B82F6)
+- **Secundária**: Verde (#10B981)
+- **Aviso**: Amarelo (#F59E0B)
+- **Erro**: Vermelho (#EF4444)
+- **Neutro**: Cinza (#6B7280)
+
+### Tipografia
+- **Títulos**: Inter, sans-serif
+- **Corpo**: Inter, sans-serif
+- **Monospace**: JetBrains Mono
+
+### Componentes
+- Botões com estados hover/focus
+- Cards com sombras sutis
+- Formulários com validação visual
+- Modais responsivos
+
+### Responsividade
+- **Mobile First**: Design otimizado para dispositivos móveis
+- **Breakpoints**: sm (640px), md (768px), lg (1024px), xl (1280px)
+- **Grid System**: Flexbox e CSS Grid
+- **Touch Friendly**: Elementos otimizados para toque
 
 ## 🔧 Scripts Disponíveis
 
@@ -134,50 +174,58 @@ yarn lint
 - **Google Gemini** - API de IA
 - **JWT** - Autenticação segura
 
-## 📋 Tarefas do Desafio
+## 📋 Funcionalidades
 
-### Fase 1: Setup e Estrutura Básica ✅
-- [x] Setup do projeto React (Frontend)
-- [x] Setup do projeto FastAPI (Backend)
-- [x] Configuração do Tailwind CSS
-- [x] Roteamento básico
-- [x] Componentes Header e Footer
+### ✅ Implementadas
+- [x] **Estrutura Base React**
+  - Setup do projeto com Vite
+  - Roteamento com React Router
+  - Configuração Tailwind CSS
+  - Componentes base (Header, Footer)
+  - Páginas principais (Home, About, Contact)
 
-### Fase 2: Funcionalidades Core
-- [ ] **Sistema de Upload (Frontend + Backend)**
-  - Componente de drag & drop para PDFs
-  - API para receber arquivos
-  - Validação de arquivos
-  - Armazenamento no backend
-  
-- [ ] **Sistema de Autenticação (Full-stack)**
-  - Páginas de Login/Register (Frontend)
-  - API de autenticação JWT (Backend)
+- [x] **Configuração de Build**
+  - Sistema de build com Vite
+  - Configuração ESLint
+  - PostCSS e Autoprefixer
+  - Build de produção otimizado
+
+- [x] **Cliente HTTP**
+  - Configuração Axios
+  - Interceptors para autenticação
+  - Tratamento de erros centralizado
+
+### 🚧 Em Desenvolvimento
+- [ ] **Sistema de Autenticação**
+  - Páginas de Login/Register
+  - Gerenciamento de estado com Zustand
   - Proteção de rotas
-  - Gerenciamento de estado
-  
-- [ ] **Dashboard Principal (Frontend)**
-  - Cards de estatísticas
-  - Lista de currículos
-  - Navegação entre seções
+  - Persistência de sessão
 
-### Fase 3: Integração com IA
-- [ ] **Análise de Currículos (Backend)**
-  - Extração de texto de PDFs
-  - Processamento com spaCy
-  - Integração com Google Gemini
-  - Geração de métricas
-  
-- [ ] **Visualizações (Frontend)**
+- [ ] **Dashboard Principal**
+  - Upload de currículos com drag & drop
+  - Visualização de métricas
+  - Histórico de análises
   - Gráficos de progresso
-  - Métricas de qualidade
-  - Histórico de versões
 
-### Fase 4: Funcionalidades Avançadas
-- [ ] **Sistema de Notificações**
-- [ ] **Exportação de Relatórios**
-- [ ] **Filtros e Busca**
-- [ ] **Responsividade Mobile**
+- [ ] **Sistema de Upload**
+  - Componente React Dropzone
+  - Validação de arquivos PDF
+  - Barra de progresso
+  - Tratamento de erros
+
+### 📋 Planejadas
+- [ ] **Análise de Currículos**
+  - Visualização de resultados de IA
+  - Comparação entre versões
+  - Sugestões de melhoria
+  - Exportação de relatórios
+
+- [ ] **Funcionalidades Avançadas**
+  - Sistema de notificações
+  - Filtros e busca avançada
+  - Responsividade mobile completa
+  - PWA (Progressive Web App)
 
 ## 🚀 Comandos Úteis para Desenvolvimento
 

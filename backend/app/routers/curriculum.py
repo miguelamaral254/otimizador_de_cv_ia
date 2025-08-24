@@ -1,178 +1,216 @@
+"""
+Router para operações relacionadas a currículos.
+
+Este módulo contém os endpoints para upload, análise e gerenciamento de currículos.
+"""
+
+import json
+import os
 import uuid
-import aiofiles
-from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from sqlalchemy import select
-import fitz  # PyMuPDF para manipulação de PDFs
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 from app.models.user import User
-from app.models.curriculum import Curriculum, CurriculumVersion, CurriculumAnalysis
-from app.schemas.curriculum import CurriculumResponse, CurriculumUploadResponse
+from app.models.curriculum import Curriculum
+from app.models.metrics import Metrics
+from app.schemas.curriculum import CurriculumAnalysis
 from app.core.database import get_db
-from app.core import settings
-from app.api.dependencies import get_current_user
+from app.core.deps import get_current_active_user
+from app.analysis import (
+    analisar_quantificacao,
+    analisar_verbos_de_acao,
+    calcular_pontuacoes,
+    analisar_palavras_chave,
+    gerar_feedback_qualitativo_gemini,
+    analisar_curriculo_completo,
+    analisar_curriculo_com_agno
+)
+from app.utils.file_utils import extrair_texto_de_pdf, validar_arquivo_pdf, salvar_arquivo_pdf
 
 router = APIRouter()
 
-@router.post("/upload", response_model=CurriculumUploadResponse)
+@router.post("/upload", response_model=CurriculumAnalysis)
 async def upload_curriculum(
-    file: UploadFile = File(...), 
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    file: UploadFile = File(...),
+    job_description: str = Form(None)
 ):
     """
-    Upload de currículo em PDF para análise.
+    Endpoint para upload e análise de um currículo em PDF.
     
     Args:
+        db: Sessão do banco de dados
+        current_user: Usuário autenticado
         file: Arquivo PDF do currículo
-        current_user: Usuário autenticado
-        db: Sessão do banco de dados
+        job_description: Descrição da vaga (opcional)
         
     Returns:
-        CurriculumUploadResponse: Resposta com dados do currículo enviado
+        CurriculumAnalysis: Resultado completo da análise
     """
-    # 1. Validação do arquivo
-    if not file.filename.lower().endswith('.pdf'):
+    # Valida o arquivo PDF
+    validar_arquivo_pdf(file)
+    
+    # Extrai o texto do PDF
+    texto_cv = await extrair_texto_de_pdf(file)
+    if not texto_cv:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Apenas arquivos PDF são aceitos"
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Não foi possível extrair texto do PDF."
         )
     
-    if file.size > settings.max_file_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Arquivo muito grande. Tamanho máximo: {settings.max_file_size / 1024 / 1024:.1f}MB"
-        )
+    # Salva o arquivo físico
+    from app.core.config import settings
+    unique_filename = f"{current_user.id}_{uuid.uuid4()}_{file.filename}"
+    file_path = await salvar_arquivo_pdf(file, settings.upload_dir, unique_filename)
     
-    # 2. Define o diretório e garante que ele exista
-    UPLOAD_DIRECTORY = Path(settings.upload_dir)
-    UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    # Executa análise completa usando o orquestrador Agno
+    resultado_final = analisar_curriculo_com_agno(texto_cv, job_description)
     
-    # 3. Gera um nome de arquivo único e seguro
-    file_extension = Path(file.filename).suffix
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = UPLOAD_DIRECTORY / unique_filename
+    # Se houver erro no Agno, usa análise tradicional como fallback
+    if "error" in resultado_final:
+        logger.warning(f"Erro no Agno: {resultado_final['error']}, usando análise tradicional")
+        
+        # Executa as análises estruturais com spaCy
+        analise_quant = analisar_quantificacao(texto_cv)
+        analise_verbos = analisar_verbos_de_acao(texto_cv)
+        pontuacoes = calcular_pontuacoes(analise_quant, analise_verbos)
+        
+        # Executa a análise qualitativa com Gemini
+        feedback_gemini = gerar_feedback_qualitativo_gemini(texto_cv)
+        
+        # Compila o resultado final
+        resultado_final = {
+            "feedback_qualitativo": feedback_gemini,
+            "quantificacao": analise_quant,
+            "verbos_de_acao": analise_verbos,
+            "pontuacoes": pontuacoes,
+        }
+        
+        if job_description:
+            resultado_final["palavras_chave"] = analisar_palavras_chave(texto_cv, job_description)
     
+    # Persiste os dados no banco
+    db_curriculum = Curriculum(
+        user_id=current_user.id,
+        filename=file.filename,
+        file_path=file_path,
+        analysis_result=json.dumps(resultado_final, ensure_ascii=False)
+    )
+    db.add(db_curriculum)
+    db.flush()  # Usa flush para obter o ID do currículo antes do commit
+    
+    # Extrai pontuações do resultado do Agno ou da análise tradicional
+    if "pontuacoes" in resultado_final:
+        pontuacoes = resultado_final["pontuacoes"]
+        action_verbs_score = pontuacoes.get("pontuacao_verbos_acao", 0.0)
+        quantification_score = pontuacoes.get("pontuacao_quantificacao", 0.0)
+        overall_score = pontuacoes.get("pontuacao_geral", 0.0)
+    else:
+        # Fallback para análise tradicional
+        action_verbs_score = 0.0
+        quantification_score = 0.0
+        overall_score = 0.0
+    
+    db_metrics = Metrics(
+        curriculum_id=db_curriculum.id,
+        action_verbs_score=action_verbs_score,
+        quantification_score=quantification_score,
+        overall_score=overall_score
+    )
+    db.add(db_metrics)
+    db.commit()
+    db.refresh(db_curriculum)
+    
+    return {
+        "curriculum_info": db_curriculum,
+        "analysis": resultado_final
+    }
+
+@router.get("/test-agno")
+async def test_agno():
+    """
+    Endpoint de teste para verificar o funcionamento do Agno.
+    
+    Returns:
+        Status das ferramentas de análise
+    """
     try:
-        # 4. Lê o conteúdo do arquivo e salva no diretório
-        contents = await file.read()
-        async with aiofiles.open(file_path, "wb") as buffer:
-            await buffer.write(contents)
-        
-        # 5. Extrai o texto do PDF
-        extracted_text = ""
-        try:
-            with fitz.open(file_path) as doc:
-                for page in doc:
-                    extracted_text += page.get_text()
-        except Exception as e:
-            # Remove o arquivo se houver erro no processamento
-            file_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Erro ao processar o PDF: {str(e)}"
-            )
-        
-        # 6. Salva informações no banco de dados
-        new_curriculum = Curriculum(
-            user_id=current_user.id,
-            original_filename=file.filename,
-            file_path=str(file_path),
-            file_size=file.size,
-            title=file.filename.replace('.pdf', ''),
-            description=f"Currículo enviado em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-        )
-        
-        db.add(new_curriculum)
-        await db.commit()
-        await db.refresh(new_curriculum)
-        
-        # 7. Retorna resposta de sucesso
-        return CurriculumUploadResponse(
-            curriculum=CurriculumResponse(
-                id=new_curriculum.id,
-                user_id=new_curriculum.user_id,
-                original_filename=new_curriculum.original_filename,
-                file_path=new_curriculum.file_path,
-                file_size=new_curriculum.file_size,
-                created_at=new_curriculum.created_at,
-                updated_at=new_curriculum.updated_at
-            ),
-            message="Currículo enviado com sucesso!"
-        )
-        
+        from app.analysis import verificar_saude_agno
+        health_status = verificar_saude_agno()
+        return {
+            "status": "success",
+            "agno_health": health_status,
+            "message": "Agno está funcionando corretamente"
+        }
     except Exception as e:
-        # Remove o arquivo em caso de erro
-        file_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro interno do servidor: {str(e)}"
-        )
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Erro ao verificar status do Agno"
+        }
 
-
-@router.get("/history", response_model=list[CurriculumResponse])
-async def get_history(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+@router.get("/list")
+async def list_curricula(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    Obtém o histórico de currículos do usuário.
+    Lista todos os currículos do usuário autenticado.
     
     Args:
-        current_user: Usuário autenticado
         db: Sessão do banco de dados
+        current_user: Usuário autenticado
         
     Returns:
-        List[CurriculumResponse]: Lista de currículos do usuário
+        Lista de currículos do usuário
     """
     try:
-        result = await db.execute(
+        result = db.execute(
             select(Curriculum).where(Curriculum.user_id == current_user.id)
         )
         curricula = result.scalars().all()
         
         return [
-            CurriculumResponse(
-                id=curriculum.id,
-                user_id=curriculum.user_id,
-                original_filename=curriculum.original_filename,
-                file_path=curriculum.file_path,
-                file_size=curriculum.file_size,
-                created_at=curriculum.created_at,
-                updated_at=curriculum.updated_at
-            )
+            {
+                "id": curriculum.id,
+                "filename": curriculum.filename,
+                "upload_date": curriculum.upload_date,
+                "file_path": curriculum.file_path
+            }
             for curriculum in curricula
         ]
-        
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao buscar histórico: {str(e)}"
+            detail=f"Erro ao listar currículos: {str(e)}"
         )
 
-
-@router.get("/{curriculum_id}", response_model=CurriculumResponse)
+@router.get("/{curriculum_id}")
 async def get_curriculum(
     curriculum_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    Obtém um currículo específico do usuário.
+    Obtém detalhes de um currículo específico.
     
     Args:
         curriculum_id: ID do currículo
-        current_user: Usuário autenticado
         db: Sessão do banco de dados
+        current_user: Usuário autenticado
         
     Returns:
-        CurriculumResponse: Dados do currículo
+        Detalhes do currículo
     """
     try:
-        result = await db.execute(
+        result = db.execute(
             select(Curriculum).where(
                 Curriculum.id == curriculum_id,
                 Curriculum.user_id == current_user.id
@@ -186,16 +224,13 @@ async def get_curriculum(
                 detail="Currículo não encontrado"
             )
         
-        return CurriculumResponse(
-            id=curriculum.id,
-            user_id=curriculum.user_id,
-            original_filename=curriculum.original_filename,
-            file_path=curriculum.file_path,
-            file_size=curriculum.file_size,
-            created_at=curriculum.created_at,
-            updated_at=curriculum.updated_at
-        )
-        
+        return {
+            "id": curriculum.id,
+            "filename": curriculum.filename,
+            "upload_date": curriculum.upload_date,
+            "file_path": curriculum.file_path,
+            "analysis_result": json.loads(curriculum.analysis_result) if curriculum.analysis_result else None
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -204,33 +239,31 @@ async def get_curriculum(
             detail=f"Erro interno do servidor: {str(e)}"
         )
 
-
-@router.get("/{curriculum_id}/analyses", response_model=list[CurriculumAnalysisResponse])
-async def get_curriculum_analyses(
+@router.delete("/{curriculum_id}")
+async def delete_curriculum(
     curriculum_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    Obtém todas as análises de um currículo específico do usuário.
+    Remove um currículo específico.
     
     Args:
         curriculum_id: ID do currículo
-        current_user: Usuário autenticado
         db: Sessão do banco de dados
+        current_user: Usuário autenticado
         
     Returns:
-        List[CurriculumAnalysisResponse]: Lista de análises do currículo
+        Confirmação de remoção
     """
     try:
-        # Verificar se o currículo pertence ao usuário
-        curriculum_result = await db.execute(
+        result = db.execute(
             select(Curriculum).where(
                 Curriculum.id == curriculum_id,
                 Curriculum.user_id == current_user.id
             )
         )
-        curriculum = curriculum_result.scalar_one_or_none()
+        curriculum = result.scalar_one_or_none()
         
         if not curriculum:
             raise HTTPException(
@@ -238,34 +271,15 @@ async def get_curriculum_analyses(
                 detail="Currículo não encontrado"
             )
         
-        # Buscar todas as análises do currículo
-        analyses_result = await db.execute(
-            select(CurriculumAnalysis)
-            .where(CurriculumAnalysis.curriculum_id == curriculum_id)
-            .order_by(CurriculumAnalysis.analysis_date)
-        )
-        analyses = analyses_result.scalars().all()
+        # Remove o arquivo físico
+        if os.path.exists(curriculum.file_path):
+            os.remove(curriculum.file_path)
         
-        return [
-            CurriculumAnalysisResponse(
-                id=analysis.id,
-                curriculum_id=analysis.curriculum_id,
-                version_id=analysis.version_id,
-                spacy_analysis=analysis.spacy_analysis,
-                gemini_analysis=analysis.gemini_analysis,
-                action_verbs_count=analysis.action_verbs_count,
-                quantified_results_count=analysis.quantified_results_count,
-                keywords_score=analysis.keywords_score,
-                overall_score=analysis.overall_score,
-                strengths=analysis.strengths or [],
-                weaknesses=analysis.weaknesses or [],
-                suggestions=analysis.suggestions or [],
-                analysis_date=analysis.analysis_date,
-                processing_time=analysis.processing_time
-            )
-            for analysis in analyses
-        ]
+        # Remove do banco de dados
+        db.delete(curriculum)
+        db.commit()
         
+        return {"message": "Currículo removido com sucesso"}
     except HTTPException:
         raise
     except Exception as e:

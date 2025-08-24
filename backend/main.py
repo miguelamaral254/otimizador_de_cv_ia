@@ -58,19 +58,19 @@ app.add_middleware(
 # Registro das rotas
 app.include_router(
     auth.router,
-    prefix="/api/v1/auth",
+    prefix="/api/auth",
     tags=["authentication"]
 )
 
 app.include_router(
     curriculum.router,
-    prefix="/api/v1/curriculum",
+    prefix="/api/curriculum",
     tags=["curriculum"]
 )
 
 app.include_router(
     metrics.router,
-    prefix="/api/v1/metrics",
+    prefix="/api/metrics",
     tags=["metrics"]
 )
 

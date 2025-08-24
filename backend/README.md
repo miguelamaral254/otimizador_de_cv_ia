@@ -2,6 +2,19 @@
 
 Este é o backend da aplicação **"Otimizador de Currículos com IA"**, desenvolvido em FastAPI com Python 3.11.5. Esta plataforma SaaS permite que usuários façam upload de currículos em PDF, recebam análises detalhadas geradas por IA e acompanhem a evolução da qualidade de seus currículos ao longo do tempo.
 
+## 📋 Índice
+
+- [Visão Geral](#-visão-geral-do-projeto)
+- [Arquitetura e Tecnologias](#️-arquitetura-e-tecnologias)
+- [Funcionalidades](#-funcionalidades-implementadas)
+- [Instalação](#️-instalação-e-configuração)
+- [Execução](#️-executando-o-projeto)
+- [Estrutura](#-estrutura-do-projeto)
+- [API Endpoints](#-endpoints-da-api)
+- [Testes](#-testes)
+- [Deploy](#-deploy)
+- [Contribuição](#-contribuição)
+
 ## 🎯 Visão Geral do Projeto
 
 O **Otimizador de Currículos com IA** é uma ferramenta de alto impacto que combina:
@@ -58,12 +71,17 @@ O **Otimizador de Currículos com IA** é uma ferramenta de alto impacto que com
 
 ### 🚧 Em Desenvolvimento
 - [ ] Sistema de autenticação JWT completo
-- [ ] Upload e processamento de PDFs
-- [ ] Análise de currículos com spaCy
-- [ ] Integração com Google Gemini
 - [ ] Histórico de versões
 - [ ] Dashboard com métricas
 - [ ] API REST completa
+
+### ✅ Funcionalidades de Análise Implementadas
+- [x] Upload e processamento de PDFs com pypdf
+- [x] Análise de currículos com spaCy (verbos de ação, quantificação)
+- [x] Integração com Google Gemini para feedback qualitativo
+- [x] Análise de palavras-chave baseada em descrição de vaga
+- [x] Sistema de pontuação e classificação automática
+- [x] Persistência de resultados no banco de dados
 
 ## 🛠️ Instalação e Configuração
 
@@ -144,19 +162,69 @@ backend/
 ├── .env                   # Variáveis de ambiente
 ├── pyproject.toml         # Configuração do projeto e dependências
 ├── main.py                # Arquivo principal da aplicação
+├── init_db.py             # Script de inicialização do banco
+├── test_metrics_api.py    # Testes da API
 ├── README.md              # Este arquivo
 ├── uploads/               # Diretório para uploads de PDFs
 └── app/                   # Código da aplicação
     ├── __init__.py
     ├── core/              # Configurações centrais
+    │   ├── __init__.py
     │   ├── config.py      # Configurações com Pydantic-Settings
-    │   └── database.py    # Configuração do banco SQLAlchemy
+    │   ├── database.py    # Configuração do banco SQLAlchemy
+    │   ├── logging.py     # Sistema de logging
+    │   └── security.py    # Configurações de segurança
     ├── models/            # Modelos SQLAlchemy
+    │   ├── __init__.py
+    │   ├── curriculum.py  # Modelo de currículo
+    │   └── user.py        # Modelo de usuário
     ├── schemas/           # Schemas Pydantic
-    ├── api/               # Rotas da API
-    ├── services/          # Lógica de negócio
+    │   ├── __init__.py
+    │   ├── common.py      # Schemas comuns
+    │   ├── curriculum.py  # Schemas de currículo
+    │   ├── metrics.py     # Schemas de métricas
+    │   └── user.py        # Schemas de usuário
+    ├── routers/           # Rotas da API
+    │   ├── __init__.py
+    │   ├── auth.py        # Rotas de autenticação
+    │   ├── curriculum.py  # Rotas de currículo
+    │   └── metrics.py     # Rotas de métricas
     └── utils/             # Utilitários
+        ├── __init__.py
+        └── file_validator.py  # Validação de arquivos
 ```
+
+## 🛣️ Endpoints da API
+
+### 🔐 Autenticação (`/api/auth`)
+| Método | Endpoint | Descrição | Status |
+|--------|----------|-----------|---------|
+| `POST` | `/register` | Cadastro de usuário | 🚧 Em desenvolvimento |
+| `POST` | `/login` | Login de usuário | 🚧 Em desenvolvimento |
+| `POST` | `/logout` | Logout de usuário | 🚧 Em desenvolvimento |
+
+### 📄 Currículos (`/api/curriculum`)
+| Método | Endpoint | Descrição | Status |
+|--------|----------|-----------|---------|
+| `POST` | `/upload` | Upload e análise de currículo PDF | ✅ Implementado |
+| `GET` | `/list` | Lista de currículos do usuário | ✅ Implementado |
+| `GET` | `/{id}` | Detalhes de um currículo | ✅ Implementado |
+| `DELETE` | `/{id}` | Remoção de currículo | ✅ Implementado |
+
+### 📊 Métricas (`/api/metrics`)
+| Método | Endpoint | Descrição | Status |
+|--------|----------|-----------|---------|
+| `GET` | `/history` | Histórico de métricas | 🚧 Em desenvolvimento |
+| `GET` | `/progress` | Progresso do usuário | 🚧 Em desenvolvimento |
+| `GET` | `/analytics` | Análises detalhadas | 🚧 Em desenvolvimento |
+
+### 🏥 Saúde e Informações (`/`)
+| Método | Endpoint | Descrição | Status |
+|--------|----------|-----------|---------|
+| `GET` | `/` | Informações da API | ✅ Implementado |
+| `GET` | `/health` | Health check | ✅ Implementado |
+| `GET` | `/docs` | Documentação Swagger | ✅ Implementado |
+| `GET` | `/redoc` | Documentação ReDoc | ✅ Implementado |
 
 ## 🔧 Comandos Úteis
 
@@ -300,13 +368,33 @@ Este projeto é parte do **Desafio Técnico do Time** para desenvolvimento full-
 ## 📝 Próximos Passos
 
 1. **Implementar autenticação JWT** completa
-2. **Criar modelos de banco de dados** para usuários e currículos
-3. **Implementar upload de arquivos PDF** com validação
-4. **Integrar análise de IA** com spaCy, Gemini e Agno
-5. **Criar sistema de histórico** de versões
-6. **Implementar dashboard** com métricas e gráficos
-7. **Adicionar testes unitários** e de integração
-8. **Configurar CI/CD** para deploy automático
+2. **Criar sistema de histórico** de versões
+3. **Implementar dashboard** com métricas e gráficos
+4. **Adicionar testes unitários** e de integração
+5. **Configurar CI/CD** para deploy automático
+
+## 🧪 Testando a Funcionalidade
+
+### Teste das Funções de Análise
+```bash
+# Execute o teste das funções de análise
+python test_analysis.py
+```
+
+### Teste da API Completa
+```bash
+# Inicie o servidor
+uv run uvicorn main:app --reload
+
+# Acesse a documentação
+# http://localhost:8000/docs
+```
+
+### Endpoint de Upload Testado
+- **POST** `/api/curriculum/upload` - Upload e análise completa de currículos
+- Suporte a arquivos PDF até 10MB
+- Análise automática com spaCy e Google Gemini
+- Persistência de resultados no banco de dados
 
 ## 📄 Licença
 

@@ -29,7 +29,7 @@ class PaginationParams(BaseModel):
     page: int = Field(1, ge=1, description="Número da página")
     per_page: int = Field(10, ge=1, le=100, description="Itens por página")
     sort_by: Optional[str] = None
-    sort_order: str = Field("desc", regex="^(asc|desc)$")
+    sort_order: str = Field("desc", pattern="^(asc|desc)$")
 
 
 class PaginationResponse(BaseModel):

@@ -68,16 +68,39 @@ A plataforma que vocês construirão deverá ter as seguintes funcionalidades:
 
 ---
 
-### Orientações para a Documentação
+### 📚 Documentação do Projeto
 
-Uma boa documentação é crucial e fará parte da entrega.
+Este projeto possui documentação completa e detalhada:
 
-* **Documentação do Backend (FastAPI):**
-    * Utilizem os recursos do FastAPI para gerar uma documentação de API interativa e bem descrita.
-    * No `README.md` do backend, incluam instruções de setup e uma visão geral da arquitetura.
+### 📖 Documentação Geral
+- **[DOCUMENTACAO_COMPLETA.md](./DOCUMENTACAO_COMPLETA.md)** - Visão geral completa do projeto, incluindo backend e frontend
 
-* **Documentação do Frontend (React):**
-    * Documentem os componentes principais, explicando suas responsabilidades e as `props`.
-    * No `README.md` do frontend, guiem outros desenvolvedores a rodar o projeto e expliquem a estrutura de pastas.
+### 🚀 Documentação do Backend
+- **[Backend README.md](./backend/README.md)** - Documentação detalhada da API FastAPI, incluindo:
+  - Instruções de setup e instalação
+  - Visão geral da arquitetura
+  - Endpoints da API
+  - Configurações e variáveis de ambiente
+  - Comandos úteis para desenvolvimento
+
+### 🎨 Documentação do Frontend
+- **[Frontend README.md](./frontend/README.md)** - Documentação completa do React, incluindo:
+  - Setup e instalação
+  - Estrutura de componentes
+  - Sistema de design
+  - Funcionalidades implementadas e planejadas
+  - Comandos para desenvolvimento
+
+### 📋 Instruções de Documentação
+
+* **Backend (FastAPI):**
+    * Utilize os recursos do FastAPI para gerar documentação de API interativa em `/docs`
+    * Mantenha o `README.md` atualizado com instruções de setup e arquitetura
+    * Documente todos os endpoints, modelos e schemas
+
+* **Frontend (React):**
+    * Documente os componentes principais, explicando responsabilidades e props
+    * Mantenha o `README.md` atualizado com instruções de execução
+    * Documente a estrutura de pastas e decisões de arquitetura
 
 Bom trabalho, time! Este é um projeto desafiador e uma ótima oportunidade para construirmos algo incrível juntos.
