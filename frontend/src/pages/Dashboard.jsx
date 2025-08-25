@@ -93,14 +93,38 @@ const Dashboard = () => {
         jobDescription
       );
 
+      // PASSO 3: Garanta que os dados sejam um objeto
+      let analysisData = result.analysis;
+      if (typeof analysisData === 'string') {
+        try {
+          analysisData = JSON.parse(analysisData);
+        } catch (error) {
+          console.error("Erro ao fazer parse do JSON da análise:", error);
+          setError('Erro ao processar os dados da análise. Tente novamente.');
+          return;
+        }
+      }
+
+      // PASSO 4: Acesse os dados da forma correta
+      const qualitativo = analysisData?.feedback_qualitativo || {};
+      const pontosFortes = qualitativo?.pontos_fortes || [];
+      const pontosFracos = qualitativo?.pontos_fracos || [];
+      const sugestoes = qualitativo?.sugestoes || [];
+
       setAnalysisResult({
-        score: result.analysis?.pontuacoes?.pontuacao_geral || 75,
-        suggestions: result.analysis?.feedback_qualitativo?.split('. ') || [
-          'Análise concluída com sucesso',
-          'Verifique as sugestões de melhoria'
-        ],
-        keywords: result.analysis?.palavras_chave || [],
-        missingSkills: result.analysis?.sugestoes_melhoria || []
+        score: analysisData?.pontuacoes?.pontuacao_geral || 75,
+        suggestions: [], // Removido - não é mais usado
+        keywords: analysisData?.palavras_chave?.items || [],
+        missingSkills: analysisData?.sugestoes_melhoria || [],
+        // Novos campos para a nova estrutura
+        pontosFortes,
+        pontosFracos,
+        sugestoes,
+        quantificacao: analysisData?.quantificacao || {},
+        verbosDeAcao: analysisData?.verbos_de_acao || {},
+        // Métricas corretas do banco de dados
+        quantifiedResultsCount: analysisData?.quantified_results_count || 0,
+        actionVerbsCount: analysisData?.action_verbs_count || 0
       });
 
       // Recarregar dados após nova análise
@@ -178,20 +202,96 @@ const Dashboard = () => {
             <p className="mt-2 text-sm text-gray-600">Score de compatibilidade</p>
           </div>
 
-          {/* Sugestões */}
-          <div>
-            <h4 className="font-medium text-gray-900 mb-2">Sugestões de Melhoria:</h4>
-            <ul className="space-y-2">
-              {analysisResult.suggestions.map((suggestion, index) => (
-                <li key={index} className="flex items-start">
-                  <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-gray-700">{suggestion}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {/* Análise Detalhada - Nova Seção */}
+          {analysisResult.pontosFortes && analysisResult.pontosFortes.length > 0 && (
+            <div>
+              <h4 className="font-medium text-green-700 mb-2">✅ Pontos Fortes:</h4>
+              <ul className="space-y-2">
+                {analysisResult.pontosFortes.map((ponto, index) => (
+                  <li key={index} className="flex items-start">
+                    <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-gray-700">{ponto}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {analysisResult.pontosFracos && analysisResult.pontosFracos.length > 0 && (
+            <div>
+              <h4 className="font-medium text-orange-700 mb-2">⚠️ Pontos a Melhorar:</h4>
+              <ul className="space-y-2">
+                {analysisResult.pontosFracos.map((ponto, index) => (
+                  <li key={index} className="flex items-start">
+                    <svg className="w-5 h-5 text-orange-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-gray-700">{ponto}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {analysisResult.sugestoes && analysisResult.sugestoes.length > 0 && (
+            <div>
+              <h4 className="font-medium text-blue-700 mb-2">💡 Sugestões Específicas:</h4>
+              <ul className="space-y-2">
+                {analysisResult.sugestoes.map((sugestao, index) => (
+                  <li key={index} className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-gray-700">{sugestao}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Métricas Quantitativas - Nova Seção */}
+          {analysisResult.quantificacao && Object.keys(analysisResult.quantificacao).length > 0 && (
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">📊 Métricas Quantitativas:</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="text-lg font-semibold text-blue-600">
+                    {analysisResult.quantifiedResultsCount || analysisResult.quantificacao.total || 0}
+                  </div>
+                  <div className="text-sm text-blue-800">Itens Quantificados</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="text-lg font-semibold text-green-600">
+                    {analysisResult.quantificacao.score_quantificacao || 0}%
+                  </div>
+                  <div className="text-sm text-green-800">Score Quantificação</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Verbos de Ação - Nova Seção */}
+          {analysisResult.verbosDeAcao && Object.keys(analysisResult.verbosDeAcao).length > 0 && (
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">🎯 Verbos de Ação:</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="text-lg font-semibold text-purple-600">
+                    {analysisResult.actionVerbsCount || analysisResult.verbosDeAcao.total || 0}
+                  </div>
+                  <div className="text-sm text-purple-800">Total de Verbos</div>
+                </div>
+                <div className="bg-indigo-50 p-3 rounded-lg">
+                  <div className="text-lg font-semibold text-indigo-600">
+                    {analysisResult.verbosDeAcao.score_verbos || 0}%
+                  </div>
+                  <div className="text-sm text-indigo-800">Score Verbos</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Palavras-chave */}
           {analysisResult.keywords.length > 0 && (

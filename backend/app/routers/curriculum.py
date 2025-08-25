@@ -41,7 +41,7 @@ from app.utils.file_utils import (
     salvar_arquivo_pdf
 )
 from app.models.user import User
-from app.models.curriculum import Curriculum
+from app.models.curriculum import Curriculum, CurriculumAnalysis as CurriculumAnalysisModel
 from app.models.metrics import Metrics
 from app.core.logging import get_logger
 
@@ -78,6 +78,13 @@ async def upload_curriculum(
     Returns:
         CurriculumAnalysis: Resultado completo da análise
     """
+    # Inicialização das variáveis para evitar UnboundLocalError
+    resultado_final = None
+    db_curriculum = None
+    db_analysis = None
+    db_metrics = None
+    final_response = None
+    
     try:
         # Valida o arquivo PDF
         validar_arquivo_pdf(file)
@@ -208,7 +215,7 @@ async def upload_curriculum(
         await db.flush()  # Corrigido: aguardar o flush
         
         # Salva a análise na tabela CurriculumAnalysis
-        db_analysis = CurriculumAnalysis(
+        db_analysis = CurriculumAnalysisModel(
             curriculum_id=db_curriculum.id,
             spacy_analysis=json.dumps(resultado_final, ensure_ascii=False),
             overall_score=overall_score,
@@ -274,8 +281,13 @@ async def upload_curriculum(
             logger.info("DEBUG: VALIDAÇÃO PYDANTIC BEM-SUCEDIDA!")
             logger.info(f"Objeto validado: {validated_response}")
         except Exception as validation_error:
-            logger.error(f"DEBUG: ERRO NA VALIDAÇÃO PYDANTIC: {validation_error}")
-            logger.error(f"Tipo do erro: {type(validation_error)}")
+            import traceback
+            logger.error("--- ERRO ORIGINAL CAPTURADO ---")
+            logger.error(f"Tipo de Erro: {type(validation_error).__name__}")
+            logger.error(f"Mensagem: {validation_error}")
+            logger.error("Traceback completo:")
+            logger.error(traceback.format_exc())
+            logger.error("-----------------------------")
             # Em caso de erro, retorna estrutura simplificada
             return {
                 "curriculum_info": {
@@ -301,7 +313,13 @@ async def upload_curriculum(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro no upload do currículo: {e}")
+        import traceback
+        logger.error("--- ERRO GERAL CAPTURADO ---")
+        logger.error(f"Tipo de Erro: {type(e).__name__}")
+        logger.error(f"Mensagem: {e}")
+        logger.error("Traceback completo:")
+        logger.error(traceback.format_exc())
+        logger.error("-----------------------------")
         raise HTTPException(status_code=400, detail=str(e))
 
 
