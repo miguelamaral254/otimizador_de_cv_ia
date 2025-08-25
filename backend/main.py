@@ -44,9 +44,15 @@ app = FastAPI(
 # Middlewares de segurança
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["https://seu-dominio.com"],
+    allow_origins=[
+        "http://localhost:3000",  # Frontend padrão
+        "http://localhost:5173",  # Vite dev server
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "*" if settings.debug else []
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

@@ -15,8 +15,12 @@ class UserCreate(UserBase):
     
     @validator('username')
     def username_alphanumeric(cls, v):
+        # Permitir emails como username (contém @ e .)
+        if '@' in v and '.' in v:
+            return v
+        # Para outros usernames, manter a validação original
         if not v.replace('_', '').replace('-', '').isalnum():
-            raise ValueError('Username deve conter apenas letras, números, underscore e hífen')
+            raise ValueError('Username deve conter apenas letras, números, underscore e hífen, ou ser um email válido')
         return v
 
 

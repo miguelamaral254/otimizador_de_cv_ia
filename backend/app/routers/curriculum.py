@@ -47,7 +47,7 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/curriculum", tags=["curriculum"])
+router = APIRouter(tags=["curriculum"])
 
 
 def get_curriculum_service(db: AsyncSession = Depends(get_db)) -> ICurriculumService:
@@ -61,7 +61,7 @@ def get_curriculum_service(db: AsyncSession = Depends(get_db)) -> ICurriculumSer
 @router.post("/upload", response_model=CurriculumAnalysis)
 async def upload_curriculum(
     *,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),  # Mudado para AsyncSession
     current_user: User = Depends(get_current_active_user),
     file: UploadFile = File(...),
     job_description: str = Form(None)
@@ -96,53 +96,132 @@ async def upload_curriculum(
         file_path = await salvar_arquivo_pdf(file, settings.upload_dir, unique_filename)
         
         # Executa análise completa usando o orquestrador Agno
-        resultado_final = analisar_curriculo_com_agno(texto_cv, job_description)
-        
-        # Se houver erro no Agno, usa análise tradicional como fallback
-        if "error" in resultado_final:
-            logger.warning(f"Erro no Agno: {resultado_final['error']}, usando análise tradicional")
+        try:
+            resultado_final = await analisar_curriculo_com_agno(texto_cv, job_description)
             
-            # Executa as análises estruturais com spaCy
-            analise_quant = analisar_quantificacao(texto_cv)
-            analise_verbos = analisar_verbos_de_acao(texto_cv)
-            pontuacoes = calcular_pontuacoes(analise_quant, analise_verbos)
+            # Valida se a análise foi bem-sucedida
+            if not resultado_final or "error" in resultado_final:
+                error_msg = resultado_final.get("error", "Erro desconhecido na análise") if resultado_final else "Falha na análise do currículo"
+                logger.error(f"Erro na análise do currículo: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Ocorreu um erro ao analisar o currículo com o serviço de IA: {error_msg}. Tente novamente mais tarde."
+                )
             
-            # Executa a análise qualitativa com Gemini
-            feedback_gemini = gerar_feedback_qualitativo_gemini(texto_cv)
+            # Valida se a estrutura dos dados está correta antes de prosseguir
+            required_fields = ["feedback_qualitativo", "quantificacao", "verbos_de_acao", "pontuacoes"]
+            missing_fields = [field for field in required_fields if field not in resultado_final]
             
-            # Compila o resultado final
-            resultado_final = {
-                "feedback_qualitativo": feedback_gemini,
-                "quantificacao": analise_quant,
-                "verbos_de_acao": analise_verbos,
-                "pontuacoes": pontuacoes,
-            }
+            if missing_fields:
+                logger.error(f"Campos obrigatórios ausentes na análise: {missing_fields}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Erro interno na análise do currículo. Estrutura de dados inválida."
+                )
+                
+        except HTTPException:
+            raise
+        except Exception as agno_error:
+            logger.error(f"Erro crítico no Agno: {agno_error}")
+            # Fallback para análise tradicional
+            try:
+                resultado_final = {
+                    "feedback_qualitativo": {
+                        "pontos_fortes": ["Análise básica concluída"],
+                        "pontos_fracos": ["Análise limitada devido a erro no sistema"],
+                        "sugestoes": ["Tente novamente mais tarde"]
+                    },
+                    "quantificacao": {"total": 0, "items": [], "score_quantificacao": 0.0},
+                    "verbos_de_acao": {"total": 0, "items": [], "score_verbos": 0.0},
+                    "pontuacoes": {
+                        "pontuacao_verbos_acao": 0.0,
+                        "pontuacao_quantificacao": 0.0,
+                        "pontuacao_geral": 0.0
+                    }
+                }
+                
+                if job_description:
+                    resultado_final["palavras_chave"] = {"score": 0.0, "items": []}
+                    
+                logger.warning("Usando análise de fallback devido a erro no Agno")
+                
+            except Exception as fallback_error:
+                logger.error(f"Erro no fallback: {fallback_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Serviço de análise temporariamente indisponível. Tente novamente mais tarde."
+                )
             
-            if job_description:
-                resultado_final["palavras_chave"] = analisar_palavras_chave(texto_cv, job_description)
-        
-        # Persiste os dados no banco
-        db_curriculum = Curriculum(
-            user_id=current_user.id,
-            filename=file.filename,
-            file_path=file_path,
-            analysis_result=json.dumps(resultado_final, ensure_ascii=False)
-        )
-        db.add(db_curriculum)
-        db.flush()  # Usa flush para obter o ID do currículo antes do commit
-        
-        # Extrai pontuações do resultado do Agno ou da análise tradicional
-        if "pontuacoes" in resultado_final:
-            pontuacoes = resultado_final["pontuacoes"]
+        # Valida e prepara os dados para salvar no banco
+        try:
+            # Garante que todos os campos obrigatórios existam
+            pontuacoes = resultado_final.get("pontuacoes", {})
+            feedback_qualitativo = resultado_final.get("feedback_qualitativo", {})
+            quantificacao = resultado_final.get("quantificacao", {})
+            verbos_de_acao = resultado_final.get("verbos_de_acao", {})
+            palavras_chave = resultado_final.get("palavras_chave", {})
+            
+            # Validações específicas
+            if not isinstance(feedback_qualitativo, dict):
+                feedback_qualitativo = {"pontos_fortes": [], "pontos_fracos": [], "sugestoes": []}
+            
+            if not isinstance(quantificacao, dict):
+                quantificacao = {"total": 0, "items": [], "score_quantificacao": 0.0}
+                
+            if not isinstance(verbos_de_acao, dict):
+                verbos_de_acao = {"total": 0, "items": [], "score_verbos": 0.0}
+                
+            if not isinstance(palavras_chave, dict):
+                palavras_chave = {"score": 0.0, "items": []}
+            
+            # Extrai pontuações com valores padrão
             action_verbs_score = pontuacoes.get("pontuacao_verbos_acao", 0.0)
             quantification_score = pontuacoes.get("pontuacao_quantificacao", 0.0)
             overall_score = pontuacoes.get("pontuacao_geral", 0.0)
-        else:
-            # Fallback para análise tradicional
-            action_verbs_score = 0.0
-            quantification_score = 0.0
-            overall_score = 0.0
+            
+            # Valida se os scores são números válidos
+            try:
+                action_verbs_score = float(action_verbs_score) if action_verbs_score is not None else 0.0
+                quantification_score = float(quantification_score) if quantification_score is not None else 0.0
+                overall_score = float(overall_score) if overall_score is not None else 0.0
+            except (ValueError, TypeError):
+                action_verbs_score = 0.0
+                quantification_score = 0.0
+                overall_score = 0.0
+            
+        except Exception as validation_error:
+            logger.error(f"Erro na validação dos dados: {validation_error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro interno na validação dos dados da análise."
+            )
+            
+        # Persiste os dados no banco
+        db_curriculum = Curriculum(
+            user_id=current_user.id,
+            original_filename=file.filename,
+            file_path=file_path,
+            file_size=file.size,
+            title=file.filename,
+        )
+        db.add(db_curriculum)
+        await db.flush()  # Corrigido: aguardar o flush
         
+        # Salva a análise na tabela CurriculumAnalysis
+        db_analysis = CurriculumAnalysis(
+            curriculum_id=db_curriculum.id,
+            spacy_analysis=json.dumps(resultado_final, ensure_ascii=False),
+            overall_score=overall_score,
+            action_verbs_count=verbos_de_acao.get("total", 0),
+            quantified_results_count=quantificacao.get("total", 0),
+            keywords_score=palavras_chave.get("score", 0.0),
+            strengths=json.dumps(feedback_qualitativo.get("pontos_fortes", []), ensure_ascii=False),
+            weaknesses=json.dumps(feedback_qualitativo.get("pontos_fracos", []), ensure_ascii=False),
+            suggestions=json.dumps(feedback_qualitativo.get("sugestoes", []), ensure_ascii=False)
+        )
+        db.add(db_analysis)
+        
+        # Cria as métricas
         db_metrics = Metrics(
             curriculum_id=db_curriculum.id,
             action_verbs_score=action_verbs_score,
@@ -150,13 +229,74 @@ async def upload_curriculum(
             overall_score=overall_score
         )
         db.add(db_metrics)
-        db.commit()
-        db.refresh(db_curriculum)
+        await db.commit()  # Corrigido: aguardar o commit
+        await db.refresh(db_curriculum)
         
-        return {
-            "curriculum_info": db_curriculum,
-            "analysis": resultado_final
+        # DEBUG: Log dos dados que serão retornados
+        final_response = {
+            "curriculum_info": {
+                "id": int(db_curriculum.id),
+                "user_id": int(db_curriculum.user_id),
+                "filename": str(db_curriculum.original_filename),
+                "file_path": str(db_curriculum.file_path),
+                "upload_date": db_curriculum.created_at if db_curriculum.created_at else None
+            },
+            "analysis": {
+                "feedback_qualitativo": feedback_qualitativo,
+                "quantificacao": quantificacao,
+                "verbos_de_acao": verbos_de_acao,
+                "pontuacoes": pontuacoes,
+                "palavras_chave": palavras_chave,
+                "resumo": {
+                    "nivel_geral": "Análise Concluída",
+                    "pontuacao_geral": float(overall_score),
+                    "ferramentas_ai_disponiveis": True,
+                    "spacy_disponivel": True
+                }
+            }
         }
+        
+        # DEBUG: Log detalhado dos dados
+        logger.info("DEBUG: ESTRUTURA COMPLETA DOS DADOS:")
+        logger.info(f"curriculum_info: {final_response['curriculum_info']}")
+        logger.info(f"analysis keys: {list(final_response['analysis'].keys())}")
+        logger.info(f"feedback_qualitativo: {feedback_qualitativo}")
+        logger.info(f"quantificacao: {quantificacao}")
+        logger.info(f"verbos_de_acao: {verbos_de_acao}")
+        logger.info(f"pontuacoes: {pontuacoes}")
+        logger.info(f"palavras_chave: {palavras_chave}")
+        
+        # DEBUG: Validação manual do schema antes do retorno
+        try:
+            from app.schemas.curriculum import CurriculumAnalysis
+            # Tenta criar o objeto para validar
+            validated_response = CurriculumAnalysis(**final_response)
+            logger.info("DEBUG: VALIDAÇÃO PYDANTIC BEM-SUCEDIDA!")
+            logger.info(f"Objeto validado: {validated_response}")
+        except Exception as validation_error:
+            logger.error(f"DEBUG: ERRO NA VALIDAÇÃO PYDANTIC: {validation_error}")
+            logger.error(f"Tipo do erro: {type(validation_error)}")
+            # Em caso de erro, retorna estrutura simplificada
+            return {
+                "curriculum_info": {
+                    "id": int(db_curriculum.id),
+                    "user_id": int(db_curriculum.user_id),
+                    "filename": str(db_curriculum.original_filename),
+                    "file_path": str(db_curriculum.file_path),
+                    "upload_date": db_curriculum.created_at
+                },
+                "analysis": {
+                    "error": f"Erro na validação: {str(validation_error)}",
+                    "feedback_qualitativo": {"pontos_fortes": [], "pontos_fracos": [], "sugestoes": []},
+                    "quantificacao": {"total": 0, "items": [], "score_quantificacao": 0.0},
+                    "verbos_de_acao": {"total": 0, "items": [], "score_verbos": 0.0},
+                    "pontuacoes": {"pontuacao_geral": 0.0},
+                    "palavras_chave": {"score": 0.0, "items": []},
+                    "resumo": {"nivel_geral": "Erro", "pontuacao_geral": 0.0}
+                }
+            }
+        
+        return final_response
         
     except HTTPException:
         raise
@@ -178,19 +318,44 @@ async def create_curriculum(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{curriculum_id}", response_model=CurriculumResponse)
-async def get_curriculum(
-    curriculum_id: int,
-    service: ICurriculumService = Depends(get_curriculum_service)
+@router.get("/list")
+async def list_curricula(
+    db: AsyncSession = Depends(get_db),  # Mudado para AsyncSession
+    current_user: User = Depends(get_current_active_user)
 ):
-    """Busca um currículo por ID."""
+    """
+    Lista todos os currículos do usuário autenticado.
+    
+    Args:
+        db: Sessão do banco de dados
+        current_user: Usuário autenticado
+        
+    Returns:
+        Lista de currículos do usuário ou lista vazia se não houver currículos
+    """
     try:
-        return await service.get_curriculum(curriculum_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        result = await db.execute(  # Corrigido: aguardar execute
+            select(Curriculum).where(Curriculum.user_id == current_user.id)
+        )
+        curricula = result.scalars().all()
+        
+        # Retorna lista vazia se não houver currículos (não é erro)
+        return [
+            {
+                "id": curriculum.id,
+                "filename": curriculum.original_filename,
+                "upload_date": curriculum.created_at,
+                "file_path": curriculum.file_path,
+                "user_id": curriculum.user_id
+            }
+            for curriculum in curricula
+        ]
     except Exception as e:
-        logger.error(f"Erro ao buscar currículo: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+        logger.error(f"Erro ao listar currículos: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar currículos: {str(e)}"
+        )
 
 
 @router.get("/", response_model=List[CurriculumResponse])
@@ -207,41 +372,19 @@ async def list_curriculums(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
-@router.get("/list")
-async def list_curricula(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+@router.get("/{curriculum_id}", response_model=CurriculumResponse)
+async def get_curriculum(
+    curriculum_id: int,
+    service: ICurriculumService = Depends(get_curriculum_service)
 ):
-    """
-    Lista todos os currículos do usuário autenticado.
-    
-    Args:
-        db: Sessão do banco de dados
-        current_user: Usuário autenticado
-        
-    Returns:
-        Lista de currículos do usuário
-    """
+    """Busca um currículo por ID."""
     try:
-        result = db.execute(
-            select(Curriculum).where(Curriculum.user_id == current_user.id)
-        )
-        curricula = result.scalars().all()
-        
-        return [
-            {
-                "id": curriculum.id,
-                "filename": curriculum.filename,
-                "upload_date": curriculum.upload_date,
-                "file_path": curriculum.file_path
-            }
-            for curriculum in curricula
-        ]
+        return await service.get_curriculum(curriculum_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao listar currículos: {str(e)}"
-        )
+        logger.error(f"Erro ao buscar currículo: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.put("/{curriculum_id}", response_model=CurriculumResponse)

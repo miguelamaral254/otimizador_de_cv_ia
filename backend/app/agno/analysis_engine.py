@@ -864,3 +864,46 @@ class AnalysisEngine:
             return 'fair'
         else:
             return 'needs_improvement'
+
+    def analyze_text_structure(self, text: str) -> Dict[str, Any]:
+        """Analisa a estrutura do texto do currículo."""
+        if not text:
+            return self._empty_text_structure_result()
+        
+        try:
+            # Análise básica de estrutura
+            paragraphs = text.split('\n\n')
+            sentences = text.split('. ')
+            words = text.split()
+            
+            # Conta seções comuns em currículos
+            sections = {
+                'experiencia': len([p for p in paragraphs if any(word in p.lower() for word in ['experiência', 'experience', 'trabalho', 'work'])])
+            }
+            
+            # Calcula métricas de estrutura
+            structure_score = min(len(paragraphs) * 0.1 + len(sentences) * 0.02, 1.0)
+            
+            return {
+                "paragrafos": len(paragraphs),
+                "sentencas": len(sentences),
+                "palavras": len(words),
+                "secoes_identificadas": sections,
+                "score_estrutura": round(structure_score, 3),
+                "metodo_analise": "regex"
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro na análise de estrutura: {e}")
+            return self._empty_text_structure_result()
+    
+    def _empty_text_structure_result(self) -> Dict[str, Any]:
+        """Retorna resultado vazio para análise de estrutura."""
+        return {
+            "paragrafos": 0,
+            "sentencas": 0,
+            "palavras": 0,
+            "secoes_identificadas": {},
+            "score_estrutura": 0.0,
+            "metodo_analise": "nenhum"
+        }

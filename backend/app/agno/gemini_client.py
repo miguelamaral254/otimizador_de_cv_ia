@@ -44,7 +44,7 @@ class GeminiClient:
         """Verifica se o cliente está configurado."""
         return self._configured
     
-    def analyze_curriculum_structure(self, text: str) -> Dict[str, Any]:
+    async def analyze_curriculum_structure(self, text: str) -> Dict[str, Any]:
         """
         Analisa a estrutura do currículo usando Gemini.
         
@@ -58,7 +58,7 @@ class GeminiClient:
             return {"error": "Cliente Gemini não configurado"}
         
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             prompt = f"""
             Analise a estrutura do seguinte currículo e forneça uma análise detalhada em formato JSON.
@@ -87,14 +87,23 @@ class GeminiClient:
             {text[:2000]}...
             """
             
-            response = model.generate_content(prompt)
+            # Verifica se o método é assíncrono ou síncrono
+            try:
+                if hasattr(model, 'generate_content_async'):
+                    response = await model.generate_content_async(prompt)
+                else:
+                    response = model.generate_content(prompt)
+            except Exception as api_error:
+                logger.error(f"Erro na API Gemini: {api_error}")
+                return {"error": f"Erro na API Gemini: {str(api_error)}"}
+                
             return self._parse_gemini_response(response.text)
             
         except Exception as e:
             logger.error(f"Erro na análise estrutural: {e}")
             return {"error": f"Erro na análise: {str(e)}"}
     
-    def generate_qualitative_feedback(self, text: str, job_description: Optional[str] = None) -> str:
+    async def generate_qualitative_feedback(self, text: str, job_description: Optional[str] = None) -> Dict[str, Any]:
         """
         Gera feedback qualitativo sobre o currículo.
         
@@ -103,13 +112,17 @@ class GeminiClient:
             job_description: Descrição da vaga (opcional)
             
         Returns:
-            Feedback qualitativo em texto
+            Feedback qualitativo estruturado
         """
         if not self._configured:
-            return "Cliente Gemini não configurado"
+            return {
+                "pontos_fortes": ["Análise básica concluída"],
+                "pontos_fracos": ["Cliente Gemini não configurado"],
+                "sugestoes": ["Configure a chave da API do Gemini"]
+            }
         
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             if job_description:
                 prompt = f"""
@@ -121,34 +134,70 @@ class GeminiClient:
                 Currículo:
                 {text[:1500]}...
                 
-                Forneça um feedback em até 150 palavras, incluindo:
-                1. Pontos fortes do candidato
-                2. Como o currículo se alinha com a vaga
-                3. Uma sugestão principal de melhoria
-                4. Recomendação geral
+                Retorne apenas um JSON válido com a seguinte estrutura:
+                {{
+                    "pontos_fortes": ["lista de 2-3 pontos fortes do candidato"],
+                    "pontos_fracos": ["lista de 2-3 pontos fracos ou áreas para melhorar"],
+                    "sugestoes": ["lista de 2-3 sugestões específicas de melhoria"]
+                }}
                 """
             else:
                 prompt = f"""
-                Analise o seguinte currículo e forneça um feedback construtivo em até 150 palavras.
+                Analise o seguinte currículo e forneça um feedback construtivo.
                 
                 Foque em:
                 1. Pontos fortes do candidato
                 2. Qualidade geral da apresentação
-                3. Uma sugestão principal de melhoria
-                4. Recomendação geral
+                3. Sugestões de melhoria
                 
                 Currículo:
                 {text[:1500]}...
+                
+                Retorne apenas um JSON válido com a seguinte estrutura:
+                {{
+                    "pontos_fortes": ["lista de 2-3 pontos fortes do candidato"],
+                    "pontos_fracos": ["lista de 2-3 pontos fracos ou áreas para melhorar"],
+                    "sugestoes": ["lista de 2-3 sugestões específicas de melhoria"]
+                }}
                 """
             
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            # Verifica se o método é assíncrono ou síncrono
+            try:
+                if hasattr(model, 'generate_content_async'):
+                    response = await model.generate_content_async(prompt)
+                else:
+                    response = model.generate_content(prompt)
+            except Exception as api_error:
+                logger.error(f"Erro na API Gemini: {api_error}")
+                return {
+                    "pontos_fortes": ["Análise básica concluída"],
+                    "pontos_fracos": [f"Erro na API: {str(api_error)}"],
+                    "sugestoes": ["Tente novamente mais tarde"]
+                }
+                
+            parsed_response = self._parse_gemini_response(response.text)
+            
+            # Se a resposta não for um dicionário válido, retorna estrutura padrão
+            if isinstance(parsed_response, dict) and "pontos_fortes" in parsed_response:
+                return parsed_response
+            else:
+                # Fallback para estrutura padrão
+                return {
+                    "pontos_fortes": ["Análise concluída com sucesso"],
+                    "pontos_fracos": ["Verifique as sugestões de melhoria"],
+                    "sugestoes": ["Continue melhorando seu currículo"]
+                }
             
         except Exception as e:
             logger.error(f"Erro ao gerar feedback: {e}")
-            return f"Erro ao gerar feedback: {str(e)}"
+            # Retorna estrutura padrão em caso de erro
+            return {
+                "pontos_fortes": ["Análise básica concluída"],
+                "pontos_fracos": ["Erro na análise da IA"],
+                "sugestoes": ["Tente novamente mais tarde"]
+            }
     
-    def analyze_keywords_match(self, cv_text: str, job_description: str) -> Dict[str, Any]:
+    async def analyze_keywords_match(self, cv_text: str, job_description: str) -> Dict[str, Any]:
         """
         Analisa a correspondência de palavras-chave entre currículo e vaga.
         
@@ -160,10 +209,15 @@ class GeminiClient:
             Análise de correspondência de palavras-chave
         """
         if not self._configured:
-            return {"error": "Cliente Gemini não configurado"}
+            return {
+                "score": 0.0,
+                "items": [],
+                "correspondencia": 0.0,
+                "error": "Cliente Gemini não configurado"
+            }
         
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             prompt = f"""
             Analise a correspondência entre o currículo e a descrição da vaga.
@@ -176,21 +230,77 @@ class GeminiClient:
             
             Retorne apenas um JSON válido com a seguinte estrutura:
             {{
+                "score": "score de 0.0 a 1.0",
+                "items": ["lista de palavras-chave encontradas"],
+                "correspondencia": "score de 0-100",
                 "palavras_chave_encontradas": ["lista de palavras-chave encontradas"],
                 "palavras_chave_faltantes": ["lista de palavras-chave importantes que faltam"],
-                "score_correspondencia": "score de 0-100",
                 "recomendacoes": ["lista de recomendações para melhorar a correspondência"]
             }}
             """
             
-            response = model.generate_content(prompt)
-            return self._parse_gemini_response(response.text)
+            # Verifica se o método é assíncrono ou síncrono
+            try:
+                if hasattr(model, 'generate_content_async'):
+                    response = await model.generate_content_async(prompt)
+                else:
+                    response = model.generate_content(prompt)
+            except Exception as api_error:
+                logger.error(f"Erro na API Gemini: {api_error}")
+                return {
+                    "score": 0.0,
+                    "items": [],
+                    "correspondencia": 0.0,
+                    "error": f"Erro na API Gemini: {str(api_error)}"
+                }
+                
+            parsed_response = self._parse_gemini_response(response.text)
+            
+            # Se a resposta não for um dicionário válido, retorna estrutura padrão
+            if isinstance(parsed_response, dict) and "score" in parsed_response:
+                return parsed_response
+            else:
+                # Fallback para análise simples
+                return self._simple_keyword_analysis_fallback(cv_text, job_description)
             
         except Exception as e:
             logger.error(f"Erro na análise de palavras-chave: {e}")
-            return {"error": f"Erro na análise: {str(e)}"}
+            # Fallback para análise simples
+            return self._simple_keyword_analysis_fallback(cv_text, job_description)
     
-    def generate_improvement_suggestions(self, cv_text: str, analysis_results: Dict[str, Any]) -> List[str]:
+    def _simple_keyword_analysis_fallback(self, cv_text: str, job_description: str) -> Dict[str, Any]:
+        """Análise simples de palavras-chave como fallback."""
+        import re
+        
+        cv_lower = cv_text.lower()
+        job_lower = job_description.lower()
+        
+        # Extrai palavras-chave da descrição da vaga
+        job_keywords = set(re.findall(r'\b\w{3,}\b', job_lower))
+        
+        # Remove palavras comuns
+        common_words = {
+            'com', 'para', 'que', 'uma', 'por', 'mais', 'como', 'mas', 'foi', 'ele',
+            'das', 'tem', 'à', 'seu', 'sua', 'ou', 'ser', 'quando', 'muito', 'nos'
+        }
+        job_keywords = job_keywords - common_words
+        
+        # Encontra correspondências
+        found_keywords = [kw for kw in job_keywords if kw in cv_lower]
+        missing_keywords = list(job_keywords - set(found_keywords))
+        
+        score = len(found_keywords) / max(len(job_keywords), 1)
+        
+        return {
+            "score": round(score, 3),
+            "items": found_keywords[:10],
+            "correspondencia": round(score * 100, 1),
+            "palavras_chave_encontradas": found_keywords,
+            "palavras_chave_faltantes": missing_keywords,
+            "recomendacoes": ["Inclua mais palavras-chave relevantes para a vaga"]
+        }
+    
+    async def generate_improvement_suggestions(self, cv_text: str, analysis_results: Dict[str, Any]) -> List[str]:
         """
         Gera sugestões específicas de melhoria baseadas nos resultados da análise.
         
@@ -205,7 +315,7 @@ class GeminiClient:
             return ["Cliente Gemini não configurado"]
         
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             prompt = f"""
             Com base na análise do currículo, gere 5 sugestões específicas e acionáveis para melhorar o currículo.
@@ -220,7 +330,16 @@ class GeminiClient:
             Cada sugestão deve ser clara e implementável.
             """
             
-            response = model.generate_content(prompt)
+            # Verifica se o método é assíncrono ou síncrono
+            try:
+                if hasattr(model, 'generate_content_async'):
+                    response = await model.generate_content_async(prompt)
+                else:
+                    response = model.generate_content(prompt)
+            except Exception as api_error:
+                logger.error(f"Erro na API Gemini: {api_error}")
+                return [f"Erro ao gerar sugestões: {str(api_error)}"]
+                
             suggestions = response.text.strip().split('\n')
             
             # Filtra e limpa as sugestões

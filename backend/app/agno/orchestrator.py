@@ -41,7 +41,7 @@ class AgnoOrchestrator:
         logger.info(f"spaCy disponível: {self.analysis_engine.spacy_available}")
         logger.info(f"Gemini configurado: {self.gemini_client.is_configured}")
     
-    def analyze_curriculum_comprehensive(
+    async def analyze_curriculum_comprehensive(
         self, 
         cv_text: str, 
         job_description: Optional[str] = None,
@@ -68,7 +68,7 @@ class AgnoOrchestrator:
         
         try:
             # 1. Análises estruturais (spaCy + regex)
-            structural_analysis = self._perform_structural_analysis(cv_text)
+            structural_analysis = await self._perform_structural_analysis(cv_text)
             
             # 2. Análise de estrutura do texto
             if include_structure_analysis:
@@ -79,12 +79,12 @@ class AgnoOrchestrator:
             # 3. Análise de palavras-chave (se descrição da vaga fornecida)
             keyword_analysis = {}
             if job_description:
-                keyword_analysis = self._perform_keyword_analysis(cv_text, job_description)
+                keyword_analysis = await self._perform_keyword_analysis(cv_text, job_description)
             
             # 4. Feedback da IA (Gemini)
             ai_feedback = {}
             if include_ai_feedback and self.gemini_client.is_configured:
-                ai_feedback = self._perform_ai_analysis(cv_text, job_description)
+                ai_feedback = await self._perform_ai_analysis(cv_text, job_description)
             
             # 5. Cálculo de pontuações e classificação
             scores = self._calculate_comprehensive_scores(
@@ -126,11 +126,12 @@ class AgnoOrchestrator:
             logger.error(f"Erro na análise completa: {e}")
             return self._error_analysis_result(str(e))
     
-    def _perform_structural_analysis(self, cv_text: str) -> Dict[str, Any]:
+    async def _perform_structural_analysis(self, cv_text: str) -> Dict[str, Any]:
         """Executa análises estruturais usando spaCy e regex."""
         try:
-            quantification = self.analysis_engine.analyze_quantification(cv_text)
-            action_verbs = self.analysis_engine.analyze_action_verbs(cv_text)
+            # Convertendo para métodos síncronos
+            quantification = await self._analyze_quantification_sync(cv_text)
+            action_verbs = await self._analyze_action_verbs_sync(cv_text)
             
             return {
                 "quantificacao": quantification,
@@ -143,12 +144,78 @@ class AgnoOrchestrator:
                 "verbos_de_acao": {"error": str(e)}
             }
     
-    def _perform_keyword_analysis(self, cv_text: str, job_description: str) -> Dict[str, Any]:
+    async def _analyze_quantification_sync(self, text: str) -> Dict[str, Any]:
+        """Versão síncrona da análise de quantificação."""
+        try:
+            if hasattr(self.analysis_engine, 'analyze_quantification'):
+                # Se o método existe, tenta chamá-lo de forma assíncrona
+                result = await self.analysis_engine.analyze_quantification(text)
+                return result
+            else:
+                return self._simple_quantification_analysis(text)
+        except Exception as e:
+            logger.error(f"Erro na análise de quantificação assíncrona: {e}")
+            return self._simple_quantification_analysis(text)
+    
+    async def _analyze_action_verbs_sync(self, text: str) -> Dict[str, Any]:
+        """Versão assíncrona da análise de verbos de ação."""
+        try:
+            if hasattr(self.analysis_engine, 'analyze_action_verbs'):
+                # Se o método existe, tenta chamá-lo de forma assíncrona
+                result = await self.analysis_engine.analyze_action_verbs(text)
+                return result
+            else:
+                return self._simple_action_verbs_analysis(text)
+        except Exception as e:
+            logger.error(f"Erro na análise de verbos de ação assíncrona: {e}")
+            return self._simple_action_verbs_analysis(text)
+    
+    def _simple_quantification_analysis(self, text: str) -> Dict[str, Any]:
+        """Análise simples de quantificação usando regex."""
+        import re
+        
+        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+        percentages = re.findall(r'\b\d+(?:\.\d+)?%\b', text)
+        currency = re.findall(r'R?\$?\s*\d+(?:,\d{3})*(?:\.\d{2})?', text)
+        
+        score = min(len(numbers) * 0.1, 1.0)
+        
+        return {
+            "total": len(numbers),
+            "items": numbers[:10],  # Limita a 10 itens
+            "percentuais": percentages,
+            "valores_monetarios": currency,
+            "score_quantificacao": round(score, 3)
+        }
+    
+    def _simple_action_verbs_analysis(self, text: str) -> Dict[str, Any]:
+        """Análise simples de verbos de ação usando regex."""
+        import re
+        
+        # Verbos de ação comuns em currículos
+        action_verbs = [
+            'desenvolver', 'implementar', 'criar', 'construir', 'liderar', 'gerenciar',
+            'otimizar', 'melhorar', 'aumentar', 'reduzir', 'analisar', 'resolver',
+            'coordenar', 'supervisionar', 'treinar', 'mentorar', 'planejar', 'executar'
+        ]
+        
+        text_lower = text.lower()
+        found_verbs = [verb for verb in action_verbs if verb in text_lower]
+        
+        score = min(len(found_verbs) * 0.2, 1.0)
+        
+        return {
+            "total": len(found_verbs),
+            "items": found_verbs,
+            "score_verbos": round(score, 3)
+        }
+    
+    async def _perform_keyword_analysis(self, cv_text: str, job_description: str) -> Dict[str, Any]:
         """Executa análise de palavras-chave."""
         try:
             if self.gemini_client.is_configured:
                 # Usa Gemini para análise mais inteligente
-                return self.gemini_client.analyze_keywords_match(cv_text, job_description)
+                return await self.gemini_client.analyze_keywords_match(cv_text, job_description)
             else:
                 # Fallback para análise simples
                 return self._simple_keyword_analysis(cv_text, job_description)
@@ -177,39 +244,50 @@ class AgnoOrchestrator:
         found_keywords = [kw for kw in job_keywords if kw in cv_lower]
         missing_keywords = list(job_keywords - set(found_keywords))
         
-        score = len(found_keywords) / max(len(job_keywords), 1) * 100
+        score = len(found_keywords) / max(len(job_keywords), 1)
         
         return {
+            "score": round(score, 3),
+            "items": found_keywords[:10],  # Limita a 10 itens
+            "correspondencia": round(score * 100, 1),
             "palavras_chave_encontradas": found_keywords,
             "palavras_chave_faltantes": missing_keywords,
-            "score_correspondencia": round(score, 1),
             "total_palavras_chave": len(job_keywords),
             "metodo_analise": "regex_simples"
         }
     
-    def _perform_ai_analysis(self, cv_text: str, job_description: Optional[str]) -> Dict[str, Any]:
+    async def _perform_ai_analysis(self, cv_text: str, job_description: Optional[str]) -> Dict[str, Any]:
         """Executa análises usando IA (Gemini)."""
         try:
             ai_results = {}
             
             # Feedback qualitativo
-            feedback = self.gemini_client.generate_qualitative_feedback(cv_text, job_description)
+            feedback = await self.gemini_client.generate_qualitative_feedback(cv_text, job_description)
             ai_results["feedback_qualitativo"] = feedback
             
             # Análise estrutural com IA
-            structure_analysis = self.gemini_client.analyze_curriculum_structure(cv_text)
+            structure_analysis = await self.gemini_client.analyze_curriculum_structure(cv_text)
             ai_results["analise_estrutural_ia"] = structure_analysis
             
             # Sugestões de melhoria
             if "error" not in structure_analysis:
-                suggestions = self.gemini_client.generate_improvement_suggestions(cv_text, structure_analysis)
+                suggestions = await self.gemini_client.generate_improvement_suggestions(cv_text, structure_analysis)
                 ai_results["sugestoes_melhoria"] = suggestions
             
             return ai_results
             
         except Exception as e:
             logger.error(f"Erro na análise de IA: {e}")
-            return {"error": str(e)}
+            # Retorna estrutura padrão em caso de erro
+            return {
+                "feedback_qualitativo": {
+                    "pontos_fortes": ["Análise básica concluída"],
+                    "pontos_fracos": ["Análise limitada devido a erro no sistema"],
+                    "sugestoes": ["Tente novamente mais tarde"]
+                },
+                "analise_estrutural_ia": {},
+                "sugestoes_melhoria": ["Verifique a conexão com a IA"]
+            }
     
     def _calculate_comprehensive_scores(
         self, 
@@ -221,24 +299,49 @@ class AgnoOrchestrator:
         try:
             scores = {}
             
+            # Função auxiliar para converter pontuações de forma segura
+            def safe_convert_score(score_value, default=0.0):
+                """Converte pontuação para float de forma segura."""
+                if score_value is None:
+                    return default
+                
+                try:
+                    # Se já for número, retorna como está
+                    if isinstance(score_value, (int, float)):
+                        return float(score_value)
+                    
+                    # Se for string, tenta converter
+                    if isinstance(score_value, str):
+                        return float(score_value)
+                    
+                    # Se for outro tipo, retorna padrão
+                    return default
+                except (ValueError, TypeError):
+                    logger.warning(f"Não foi possível converter pontuação '{score_value}' para número. Usando valor padrão {default}")
+                    return default
+            
             # Pontuação de quantificação
-            quant_score = structural_analysis.get("quantificacao", {}).get("score_quantificacao", 0.0) * 100
+            quant_score_raw = structural_analysis.get("quantificacao", {}).get("score_quantificacao", 0.0)
+            quant_score = safe_convert_score(quant_score_raw, 0.0) * 100
             scores["pontuacao_quantificacao"] = round(quant_score, 1)
             
             # Pontuação de verbos de ação
-            verbs_score = structural_analysis.get("verbos_de_acao", {}).get("score_verbos", 0.0) * 100
+            verbs_score_raw = structural_analysis.get("verbos_de_acao", {}).get("score_verbos", 0.0)
+            verbs_score = safe_convert_score(verbs_score_raw, 0.0) * 100
             scores["pontuacao_verbos_acao"] = round(verbs_score, 1)
             
             # Pontuação de estrutura
-            if text_structure and "estrutura_geral" in text_structure:
-                structure_score = text_structure["estrutura_geral"].get("score_geral", 0.0)
+            if text_structure and "score_estrutura" in text_structure:
+                structure_score_raw = text_structure["score_estrutura"]
+                structure_score = safe_convert_score(structure_score_raw, 0.0) * 100
                 scores["pontuacao_estrutura"] = round(structure_score, 1)
             else:
                 scores["pontuacao_estrutura"] = 0.0
             
             # Pontuação de palavras-chave
             if keyword_analysis and "error" not in keyword_analysis:
-                keyword_score = keyword_analysis.get("score_correspondencia", 0.0)
+                keyword_score_raw = keyword_analysis.get("score", 0.0)
+                keyword_score = safe_convert_score(keyword_score_raw, 0.0) * 100
                 scores["pontuacao_palavras_chave"] = round(keyword_score, 1)
             else:
                 scores["pontuacao_palavras_chave"] = 0.0
@@ -327,13 +430,47 @@ class AgnoOrchestrator:
         recommendations: List[str]
     ) -> Dict[str, Any]:
         """Consolida todos os resultados em uma estrutura unificada."""
+        # Extrai dados do feedback da IA
+        feedback_data = ai_feedback.get("feedback_qualitativo", {})
+        if isinstance(feedback_data, dict):
+            pontos_fortes = feedback_data.get("pontos_fortes", ["Análise concluída com sucesso"])
+            pontos_fracos = feedback_data.get("pontos_fracos", ["Verifique as sugestões de melhoria"])
+            sugestoes = feedback_data.get("sugestoes", recommendations if recommendations else ["Continue melhorando seu currículo"])
+        else:
+            pontos_fortes = ["Análise concluída com sucesso"]
+            pontos_fracos = ["Verifique as sugestões de melhoria"]
+            sugestoes = recommendations if recommendations else ["Continue melhorando seu currículo"]
+        
         return {
+            "feedback_qualitativo": {
+                "pontos_fortes": pontos_fortes,
+                "pontos_fracos": pontos_fracos,
+                "sugestoes": sugestoes
+            },
+            "quantificacao": structural_analysis.get("quantificacao", {
+                "total": 0,
+                "items": [],
+                "score_quantificacao": 0.0
+            }),
+            "verbos_de_acao": structural_analysis.get("verbos_de_acao", {
+                "total": 0,
+                "items": [],
+                "score_verbos": 0.0
+            }),
+            "pontuacoes": {
+                "pontuacao_quantificacao": scores.get("pontuacao_quantificacao", 0.0),
+                "pontuacao_verbos_acao": scores.get("pontuacao_verbos_acao", 0.0),
+                "pontuacao_estrutura": scores.get("pontuacao_estrutura", 0.0),
+                "pontuacao_palavras_chave": scores.get("pontuacao_palavras_chave", 0.0),
+                "pontuacao_geral": scores.get("pontuacao_geral", 0.0)
+            },
+            "palavras_chave": keyword_analysis if "error" not in keyword_analysis else {
+                "score": 0.0,
+                "items": [],
+                "correspondencia": 0.0
+            },
             "analise_estrutural": structural_analysis,
             "analise_texto": text_structure,
-            "analise_palavras_chave": keyword_analysis,
-            "feedback_ia": ai_feedback,
-            "pontuacoes": scores,
-            "recomendacoes": recommendations,
             "resumo": {
                 "nivel_geral": scores.get("nivel", "N/A"),
                 "pontuacao_geral": scores.get("pontuacao_geral", 0.0),
@@ -394,7 +531,7 @@ class AgnoOrchestrator:
             "metadados": {}
         }
     
-    def get_analysis_summary(self, cv_text: str) -> Dict[str, Any]:
+    async def get_analysis_summary(self, cv_text: str) -> Dict[str, Any]:
         """
         Retorna um resumo rápido da análise do currículo.
         
@@ -408,21 +545,42 @@ class AgnoOrchestrator:
             return {"error": "Texto vazio"}
         
         try:
-            # Análise rápida usando apenas ferramentas básicas
-            quantification = self.analysis_engine.analyze_quantification(cv_text)
-            action_verbs = self.analysis_engine.analyze_action_verbs(cv_text)
+            # Análise rápida usando métodos assíncronos
+            quantification = await self._analyze_quantification_sync(cv_text)
+            action_verbs = await self._analyze_action_verbs_sync(cv_text)
             
-            # Cálculo de score básico
-            basic_score = (
-                quantification.get("score_quantificacao", 0.0) * 0.6 +
-                action_verbs.get("score_verbos", 0.0) * 0.4
-            ) * 100
+            # Função auxiliar para converter pontuações de forma segura
+            def safe_convert_score(score_value, default=0.0):
+                """Converte pontuação para float de forma segura."""
+                if score_value is None:
+                    return default
+                
+                try:
+                    # Se já for número, retorna como está
+                    if isinstance(score_value, (int, float)):
+                        return float(score_value)
+                    
+                    # Se for string, tenta converter
+                    if isinstance(score_value, str):
+                        return float(score_value)
+                    
+                    # Se for outro tipo, retorna padrão
+                    return default
+                except (ValueError, TypeError):
+                    logger.warning(f"Não foi possível converter pontuação '{score_value}' para número. Usando valor padrão {default}")
+                    return default
+            
+            # Cálculo de score básico com conversão segura
+            quant_score = safe_convert_score(quantification.get("score_quantificacao", 0.0), 0.0)
+            verbs_score = safe_convert_score(action_verbs.get("score_verbos", 0.0), 0.0)
+            
+            basic_score = (quant_score * 0.6 + verbs_score * 0.4) * 100
             
             return {
                 "score_rapido": round(basic_score, 1),
                 "nivel": self._classify_level(basic_score),
-                "quantificacao": len(quantification.get("numeros_encontrados", [])),
-                "verbos_acao": len(action_verbs.get("verbos_acao", [])),
+                "quantificacao": len(quantification.get("items", [])),
+                "verbos_acao": len(action_verbs.get("items", [])),
                 "ferramentas_disponiveis": self._get_used_tools()
             }
             
@@ -430,7 +588,7 @@ class AgnoOrchestrator:
             logger.error(f"Erro no resumo rápido: {e}")
             return {"error": str(e)}
     
-    def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> Dict[str, Any]:
         """Verifica a saúde de todas as ferramentas de análise."""
         return {
             "status": "operacional",

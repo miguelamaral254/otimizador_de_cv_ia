@@ -332,18 +332,27 @@ def gerar_feedback_qualitativo_gemini(texto_cv: str) -> str:
         return "A integração com IA generativa não está configurada ou o texto do CV está vazio."
     
     try:
-        model = genai.GenerativeModel('gemini-pro')
-        prompt = f"""
-        Analise o seguinte texto de currículo e forneça um parágrafo de feedback construtivo (em até 100 palavras).
-        Foque em pontos fortes e em uma sugestão principal de melhoria geral.
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        Texto do Currículo:
-        ---
-        {texto_cv}
-        ---
+        prompt = f"""
+        Analise o seguinte currículo e forneça um feedback construtivo em até 150 palavras.
+        
+        Foque em:
+        1. Pontos fortes do candidato
+        2. Qualidade geral da apresentação
+        3. Uma sugestão principal de melhoria
+        4. Recomendação geral
+        
+        Currículo:
+        {texto_cv[:1500]}...
         """
         
-        response = model.generate_content(prompt)
+        # Verifica se o método é assíncrono ou síncrono
+        if hasattr(model, 'generate_content_async'):
+            response = model.generate_content_async(prompt)
+        else:
+            response = model.generate_content(prompt)
+            
         return response.text.strip()
         
     except Exception as e:
@@ -396,7 +405,7 @@ def analisar_curriculo_completo(texto_cv: str, descricao_vaga: str = None) -> Di
     
     return resultado
 
-def analisar_curriculo_com_agno(texto_cv: str, descricao_vaga: str = None) -> Dict[str, Any]:
+async def analisar_curriculo_com_agno(texto_cv: str, descricao_vaga: str = None) -> Dict[str, Any]:
     """
     Executa análise completa do currículo usando o orquestrador Agno.
     
@@ -408,7 +417,7 @@ def analisar_curriculo_com_agno(texto_cv: str, descricao_vaga: str = None) -> Di
         Análise completa orquestrada pelo Agno
     """
     try:
-        return agno_orchestrator.analyze_curriculum_comprehensive(
+        return await agno_orchestrator.analyze_curriculum_comprehensive(
             cv_text=texto_cv,
             job_description=descricao_vaga,
             include_ai_feedback=True,
@@ -435,7 +444,7 @@ def obter_resumo_agno(texto_cv: str) -> Dict[str, Any]:
         print(f"Erro no resumo Agno: {e}")
         return {"error": str(e)}
 
-def verificar_saude_agno() -> Dict[str, Any]:
+async def verificar_saude_agno() -> Dict[str, Any]:
     """
     Verifica a saúde de todas as ferramentas de análise.
     
@@ -443,7 +452,7 @@ def verificar_saude_agno() -> Dict[str, Any]:
         Status das ferramentas
     """
     try:
-        return agno_orchestrator.health_check()
+        return await agno_orchestrator.health_check()
     except Exception as e:
         print(f"Erro no health check: {e}")
         return {"error": str(e)}
