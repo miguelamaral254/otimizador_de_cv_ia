@@ -7,6 +7,7 @@ function Header() {
             <nav className="container mx-auto">
                 <ul className="flex space-x-6">
                     <li><Link to="/" className="hover:text-primary-200 transition-colors">Início</Link></li>
+                    <li><Link to="/dashboard" className="hover:text-primary-200 transition-colors">Dashboard</Link></li>
                     <li><Link to="/about" className="hover:text-primary-200 transition-colors">Sobre</Link></li>
                     <li><Link to="/contact" className="hover:text-primary-200 transition-colors">Contato</Link></li>
                 </ul>
